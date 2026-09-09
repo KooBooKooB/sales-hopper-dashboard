@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sales Hopper 2026 Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: 'Sukhumvit Set', 'Taviraj', sans-serif, 'Segoe UI'; }
+    table th, table td { border: 1px solid #d1d5db; padding: 6px 8px; text-align: center; font-size: 11px; }
+    table th { background-color: #f3f4f6; font-weight: 600; white-space: nowrap; }
+    /* Style สำหรับช่อง Total ที่ผ่านเงื่อนไขโดดเด่น */
+    .highlight-green {
+      background-color: #22c55e !important; /* Green 500 */
+      color: #ffffff !important;
+      font-weight: 800 !important;
+      box-shadow: inset 0 0 4px rgba(0,0,0,0.2);
+    }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen p-3 sm:p-5">
+  <div class="max-w-[100%] mx-auto bg-white rounded-xl shadow-lg p-5">
+    
+    <!-- Header & Live Update Status -->
+    <div class="flex flex-col md:flex-row justify-between items-center mb-5 gap-3 border-b pb-4">
+      <div>
+        <h1 class="text-xl font-bold text-gray-800">Sales Hopper 2026 Dashboard</h1>
+        <p class="text-xs text-gray-500">ข้อมูล Real-time จาก Google Sheets (ไฮไลท์สีเขียวเมื่อลงข้อมูลครบตามเงื่อนไข)</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <span id="statusLed" class="inline-block w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></span>
+        <span id="lastUpdate" class="text-xs text-gray-500">กำลังดึงข้อมูล...</span>
+        <button onclick="fetchData()" class="ml-2 bg-gray-200 hover:bg-gray-300 px-3 py-1 text-xs rounded transition">Refresh</button>
+      </div>
+    </div>
+
+    <!-- Controls & Filters -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-5 bg-gray-50 p-4 rounded-lg">
+      
+      <!-- Toggle Table View -->
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1">รูปแบบการแสดงผล</label>
+        <div class="inline-flex rounded-md shadow-sm w-full" role="group">
+          <button id="btnSummary" onclick="setView('summary')" class="w-1/2 px-3 py-2 text-xs font-medium bg-blue-600 text-white rounded-l-lg border hover:bg-blue-700">Summary</button>
+          <button id="btnDetail" onclick="setView('detail')" class="w-1/2 px-3 py-2 text-xs font-medium bg-white text-gray-700 rounded-r-lg border hover:bg-gray-100">Detail</button>
+        </div>
+      </div>
+
+      <!-- Quarter Filter Buttons -->
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1">เลือก Quarter</label>
+        <div class="grid grid-cols-4 gap-1">
+          <button onclick="setQuarter('Q1')" id="btnQ1" class="q-btn bg-blue-600 text-white px-2 py-2 text-xs font-bold rounded">Q1</button>
+          <button onclick="setQuarter('Q2')" id="btnQ2" class="q-btn bg-white text-gray-700 border px-2 py-2 text-xs font-bold rounded">Q2</button>
+          <button onclick="setQuarter('Q3')" id="btnQ3" class="q-btn bg-white text-gray-700 border px-2 py-2 text-xs font-bold rounded">Q3</button>
+          <button onclick="setQuarter('Q4')" id="btnQ4" class="q-btn bg-white text-gray-700 border px-2 py-2 text-xs font-bold rounded">Q4</button>
+        </div>
+      </div>
+
+      <!-- Dropdown Filters: Product & Team -->
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Product Group</label>
+          <select id="filterProduct" onchange="renderTable()" class="w-full text-xs p-2 border rounded bg-white">
+            <option value="ALL">ทั้งหมด</option>
+            <option value="818">818</option>
+            <option value="953">953</option>
+            <option value="957">957</option>
+            <option value="959">959</option>
+            <option value="962">962</option>
+            <option value="947">947</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-600 mb-1">Team Sales</label>
+          <select id="filterTeam" onchange="onTeamChange()" class="w-full text-xs p-2 border rounded bg-white">
+            <option value="ALL">ทุกทีม</option>
+            <option value="BKK">BKK</option>
+            <option value="AY_CM_KR_UD">AY, CM, KR-UD</option>
+            <option value="SK_SR">SK-SR</option>
+            <option value="CH_PB">CH-PB</option>
+            <option value="CB">CB</option>
+            <option value="LB_RY">LB-RY</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Dropdown Filter: Individual Salesperson -->
+      <div>
+        <label class="block text-xs font-semibold text-gray-600 mb-1">ชื่อฝ่ายขาย (รายบุคคล)</label>
+        <select id="filterSalesperson" onchange="renderTable()" class="w-full text-xs p-2 border rounded bg-white">
+          <option value="ALL">ทุกคน</option>
+        </select>
+      </div>
+
+    </div>
+
+    <!-- Table Container -->
+    <div class="overflow-x-auto">
+      <div id="tableContainer" class="text-center py-8 text-gray-500">กำลังเชื่อมต่อข้อมูล...</div>
+    </div>
+
+  </div>
+
+  <script>
+    const SPREADSHEET_ID = "1BllaI8KkLyiUcIHfu8cTxn4flfDC-t8mIU2LYFkGRwI";
+    const GID = "600616619";
+
+    const TEAMS = {
+      "BKK": ["นารีรัตน์ ปิ่นแก้วเกียรติ์", "ประภาส พูลทรัพย์", "พิราวรรณ์ ปฐมานุรักษ์", "ผกาววรรณ อรุณศรี", "ธีระดา พงษ์ประเสริฐ"],
+      "AY_CM_KR_UD": ["น้ำเพชร ผิวฝ้าย", "ยานิวันพันธุ์ ดิษฐยานุรักษ์", "เกศเพชร ประสงค์ศรี", "อรวรรณ ใจสม", "เมริษา ตันธิกุล"],
+      "SK_SR": ["ศิริวรรณ ลำใย", "ธนชัย พิลึก", "ราเชน สุพัฒนนิธิ"],
+      "CH_PB": ["สุพิชฌาย์ จินดามงคล", "ทัศน์สุธี จุลศร"],
+      "CB": ["วัชรวิชญ์ วรัชยารังสรรค์", "ศิลาอาสน์ สุวรรณรงค์"],
+      "LB_RY": ["จุฑามาศ อิ่มพิทักษ์", "ศิริลักษณ์ กลิ่นหอม", "สุวรรณา รัตนาภากูล", "ธันยพัส รักษาถิ่น", "พรรณราย สุขมหาหลวง"]
+    };
+
+    const PRODUCT_RULES = {
+      "818": { colComm: 5, colSales: 8, minSales: 30000, subCols: { "Nomad": ["Nomad"], "Chemical": ["Chemical"], "Sorbent": ["Sorbent"], "Safety Walk": ["Safety Walk"] } },
+      "953": { colComm: 10, colSales: 13, minSales: 30000, subCols: { "WYPALL X": ["WYPALL X"], "WYPALL L": ["WYPALL L"], "Special Wiper": ["SPECIAL WYPER", "Special Wiper"] } },
+      "957": { colComm: 15, colSales: 18, minSales: 30000, subCols: { "ถุงมือกันบาด": ["ถุงมือกันบาด", "กลุ่มถุงมือกันบาด"], "Back support": ["Back support"] } },
+      "959": { colComm: 20, colSales: 23, minSales: 30000, subCols: { "Goggle": ["Goggle"], "Spectacle": ["Spectacle"], "Cleaning Solution": ["Cleaning Solution"] } },
+      "962": { colComm: 25, colSales: 28, minSales: 10000, subCols: { "Speedglas": ["Speedglas", "Speedglas™"] } },
+      "947": { colComm: 30, colSales: 33, minSales: 30000, subCols: { "Wonder grip": ["Wonder grip", "Wonder grip gloves"], "Protape": ["Protape", "Protape safety helmet"] } }
+    };
+
+    let rawData = [];
+    let currentView = 'summary';
+    let currentQuarter = 'Q1';
+
+    function fetchData() {
+      document.getElementById("statusLed").className = "inline-block w-3 h-3 bg-yellow-500 rounded-full animate-pulse";
+      document.getElementById("lastUpdate").innerText = "กำลังดึงข้อมูล...";
+
+      const oldScript = document.getElementById("jsonpScript");
+      if (oldScript) oldScript.remove();
+
+      const script = document.createElement('script');
+      script.id = "jsonpScript";
+      script.src = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?gid=${GID}&tqx=responseHandler:googleDocCallback`;
+      
+      script.onerror = function() {
+        document.getElementById("tableContainer").innerHTML = `<p class='text-red-500 font-bold py-4'>ไม่สามารถโหลดข้อมูลได้ กรุณาตรวจสอบการตั้งค่าการแชร์ของ Google Sheets</p>`;
+      };
+
+      document.body.appendChild(script);
+    }
+
+    window.googleDocCallback = function(json) {
+      if (!json || !json.table || !json.table.rows) {
+        document.getElementById("tableContainer").innerHTML = `<p class='text-red-500 font-bold py-4'>ไม่พบโครงสร้างข้อมูลในชีต</p>`;
+        return;
+      }
+
+      rawData = json.table.rows.map(row => {
+        return row.c ? row.c.map(cell => (cell && cell.v !== null && cell.v !== undefined) ? String(cell.f || cell.v) : "") : [];
+      });
+
+      populateSalesDropdown();
+      document.getElementById("statusLed").className = "inline-block w-3 h-3 bg-green-500 rounded-full animate-pulse";
+      document.getElementById("lastUpdate").innerText = "อัปเดตล่าสุด: " + new Date().toLocaleTimeString('th-TH');
+      renderTable();
+    };
+
+    function populateSalesDropdown() {
+      const selectSales = document.getElementById("filterSalesperson");
+      const currentSelected = selectSales.value;
+      const selectedTeam = document.getElementById("filterTeam").value;
+
+      let salesList = new Set();
+      if (selectedTeam === 'ALL') {
+        Object.values(TEAMS).forEach(list => list.forEach(name => salesList.add(name)));
+      } else {
+        (TEAMS[selectedTeam] || []).forEach(name => salesList.add(name));
+      }
+
+      selectSales.innerHTML = `<option value="ALL">ทุกคน</option>`;
+      Array.from(salesList).sort().forEach(name => {
+        const option = document.createElement('option');
+        option.value = name;
+        option.innerText = name;
+        selectSales.appendChild(option);
+      });
+
+      selectSales.value = salesList.has(currentSelected) ? currentSelected : "ALL";
+    }
+
+    function onTeamChange() {
+      populateSalesDropdown();
+      renderTable();
+    }
+
+    function checkQuarter(dateStr, q) {
+      if (!dateStr) return false;
+      const parts = dateStr.split(',')[0].split('/');
+      if (parts.length < 3) return false;
+      const day = parseInt(parts[0]);
+      const month = parseInt(parts[1]);
+      const year = parseInt(parts[2]);
+
+      const dateObj = new Date(year < 100 ? 2000 + year : year, month - 1, day);
+
+      if (q === 'Q1') {
+        return dateObj <= new Date(2026, 3, 1);
+      } else if (q === 'Q2') {
+        return dateObj > new Date(2026, 3, 1) && dateObj <= new Date(2026, 5, 30);
+      } else if (q === 'Q3') {
+        return dateObj >= new Date(2026, 6, 1) && dateObj <= new Date(2026, 8, 30);
+      } else if (q === 'Q4') {
+        return dateObj >= new Date(2026, 9, 1) && dateObj <= new Date(2026, 11, 31);
+      }
+      return true;
+    }
+
+    function renderTable() {
+      const selectedProd = document.getElementById("filterProduct").value;
+      const selectedTeam = document.getElementById("filterTeam").value;
+      const selectedSales = document.getElementById("filterSalesperson").value;
+
+      let filtered = rawData.filter(row => checkQuarter(row[0], currentQuarter));
+
+      if (selectedTeam !== 'ALL') {
+        const teamMembers = TEAMS[selectedTeam] || [];
+        filtered = filtered.filter(row => teamMembers.includes(row[1]));
+      }
+
+      if (selectedSales !== 'ALL') {
+        filtered = filtered.filter(row => row[1] === selectedSales);
+      }
+
+      if (currentView === 'summary') {
+        renderSummaryView(filtered, selectedProd, selectedTeam, selectedSales);
+      } else {
+        renderDetailView(filtered, selectedProd);
+      }
+    }
+
+    function renderSummaryView(data, selectedProd, selectedTeam, selectedSales) {
+      let salesList = [];
+      if (selectedSales !== 'ALL') {
+        salesList = [selectedSales];
+      } else if (selectedTeam !== 'ALL') {
+        salesList = TEAMS[selectedTeam] || [];
+      } else {
+        Object.values(TEAMS).forEach(list => salesList.push(...list));
+      }
+
+      let html = `<table class="min-w-full bg-white">
+        <thead>
+          <tr class="bg-blue-200 text-gray-800">
+            <th rowspan="2" class="align-middle border">ชื่อฝ่ายขาย</th>
+            <th colspan="5" class="${selectedProd==='818'||selectedProd==='ALL'?'':'hidden'} bg-blue-100">818</th>
+            <th colspan="4" class="${selectedProd==='953'||selectedProd==='ALL'?'':'hidden'} bg-indigo-100">953</th>
+            <th colspan="3" class="${selectedProd==='957'||selectedProd==='ALL'?'':'hidden'} bg-blue-100">957</th>
+            <th colspan="4" class="${selectedProd==='959'||selectedProd==='ALL'?'':'hidden'} bg-indigo-100">959</th>
+            <th colspan="2" class="${selectedProd==='962'||selectedProd==='ALL'?'':'hidden'} bg-blue-100">962</th>
+            <th colspan="3" class="${selectedProd==='947'||selectedProd==='ALL'?'':'hidden'} bg-indigo-100">947</th>
+          </tr>
+          <tr class="bg-gray-100 text-gray-700">
+            <!-- 818 -->
+            <th class="${selectedProd==='818'||selectedProd==='ALL'?'':'hidden'}">Nomad</th>
+            <th class="${selectedProd==='818'||selectedProd==='ALL'?'':'hidden'}">Chemical</th>
+            <th class="${selectedProd==='818'||selectedProd==='ALL'?'':'hidden'}">Sorbent</th>
+            <th class="${selectedProd==='818'||selectedProd==='ALL'?'':'hidden'}">Safety Walk</th>
+            <th class="${selectedProd==='818'||selectedProd==='ALL'?'':'hidden'} bg-blue-200 font-bold">Total 818</th>
+            
+            <!-- 953 -->
+            <th class="${selectedProd==='953'||selectedProd==='ALL'?'':'hidden'}">WYPALL X</th>
+            <th class="${selectedProd==='953'||selectedProd==='ALL'?'':'hidden'}">WYPALL L</th>
+            <th class="${selectedProd==='953'||selectedProd==='ALL'?'':'hidden'}">Special Wiper</th>
+            <th class="${selectedProd==='953'||selectedProd==='ALL'?'':'hidden'} bg-indigo-200 font-bold">Total 953</th>
+            
+            <!-- 957 -->
+            <th class="${selectedProd==='957'||selectedProd==='ALL'?'':'hidden'}">ถุงมือกันบาด</th>
+            <th class="${selectedProd==='957'||selectedProd==='ALL'?'':'hidden'}">Back support</th>
+            <th class="${selectedProd==='957'||selectedProd==='ALL'?'':'hidden'} bg-blue-200 font-bold">Total 957</th>
+            
+            <!-- 959 -->
+            <th class="${selectedProd==='959'||selectedProd==='ALL'?'':'hidden'}">Goggle</th>
+            <th class="${selectedProd==='959'||selectedProd==='ALL'?'':'hidden'}">Spectacle</th>
+            <th class="${selectedProd==='959'||selectedProd==='ALL'?'':'hidden'}">Cleaning Solution</th>
+            <th class="${selectedProd==='959'||selectedProd==='ALL'?'':'hidden'} bg-indigo-200 font-bold">Total 959</th>
+            
+            <!-- 962 -->
+            <th class="${selectedProd==='962'||selectedProd==='ALL'?'':'hidden'}">Speedglas</th>
+            <th class="${selectedProd==='962'||selectedProd==='ALL'?'':'hidden'} bg-blue-200 font-bold">Total 962</th>
+            
+            <!-- 947 -->
+            <th class="${selectedProd==='947'||selectedProd==='ALL'?'':'hidden'}">Wonder grip</th>
+            <th class="${selectedProd==='947'||selectedProd==='ALL'?'':'hidden'}">Protape</th>
+            <th class="${selectedProd==='947'||selectedProd==='ALL'?'':'hidden'} bg-indigo-200 font-bold">Total 947</th>
+          </tr>
+        </thead>
+        <tbody>`;
+
+      let grandTotals = {};
+      Object.keys(PRODUCT_RULES).forEach(pCode => {
+        Object.keys(PRODUCT_RULES[pCode].subCols).forEach(subCat => {
+          grandTotals[`${pCode}_${subCat}`] = 0;
+        });
+        grandTotals[`${pCode}_TOTAL`] = 0;
+      });
+
+      salesList.forEach(salesName => {
+        const salesRows = data.filter(r => r[1] === salesName);
+        let subCounts = {};
+        let groupTotals = { "818": 0, "953": 0, "957": 0, "959": 0, "962": 0, "947": 0 };
+
+        Object.keys(PRODUCT_RULES).forEach(pCode => {
+          Object.keys(PRODUCT_RULES[pCode].subCols).forEach(subCat => {
+            subCounts[`${pCode}_${subCat}`] = 0;
+          });
+        });
+
+        const trackedKeys = new Set();
+
+        salesRows.forEach(row => {
+          const accountId = row[2] || "";
+
+          Object.keys(PRODUCT_RULES).forEach(pCode => {
+            const rule = PRODUCT_RULES[pCode];
+            const comm = row[rule.colComm] || "";
+            const salesVal = parseFloat((row[rule.colSales] || "0").replace(/,/g, ''));
+
+            if (salesVal >= rule.minSales) {
+              Object.keys(rule.subCols).forEach(subCat => {
+                const keywords = rule.subCols[subCat];
+                const isMatch = keywords.some(kw => comm.toLowerCase().includes(kw.toLowerCase()));
+
+                if (isMatch) {
+                  const uniqueKey = `${salesName}_${accountId}_${pCode}_${subCat}_${comm.trim().toLowerCase()}`;
+                  if (!trackedKeys.has(uniqueKey)) {
+                    trackedKeys.add(uniqueKey);
+                    subCounts[`${pCode}_${subCat}`]++;
+                    groupTotals[pCode]++;
+                    grandTotals[`${pCode}_${subCat}`]++;
+                    grandTotals[`${pCode}_TOTAL`]++;
+                  }
+                }
+              });
+            }
+          });
+        });
+
+        // Function to check highlighting condition for product groups
+        function checkHighlight(pCode) {
+          const subCats = Object.keys(PRODUCT_RULES[pCode].subCols);
+          // เงื่อนไข 1: มีข้อมูลครบทุก Commodity ย่อยในกลุ่มนั้น (> 0)
+          const hasAllCommodities = subCats.every(subCat => subCounts[`${pCode}_${subCat}`] > 0);
+          
+          // เงื่อนไข 2: เกณฑ์จำนวนรวมขั้นต่ำ (962 ต้อง >= 3, ส่วนกลุ่มอื่นต้อง >= 6)
+          const minRequired = (pCode === '962') ? 3 : 6;
+          const totalQualified = groupTotals[pCode] >= minRequired;
+
+          return hasAllCommodities && totalQualified;
+        }
+
+        html += `<tr>
+          <td class="font-medium text-left px-3">${salesName}</td>
+          <!-- 818 -->
+          <td class="${selectedProd==='818'||selectedProd==='ALL'?'':'hidden'}">${subCounts['818_Nomad']}</td>
+          <td class="${selectedProd==='818'||selectedProd==='ALL'?'':'hidden'}">${subCounts['818_Chemical']}</td>
+          <td class="${selectedProd==='818'||selectedProd==='ALL'?'':'hidden'}">${subCounts['818_Sorbent']}</td>
+          <td class="${selectedProd==='818'||selectedProd==='ALL'?'':'hidden'}">${subCounts['818_Safety Walk']}</td>
+          <td class="${selectedProd==='818'||selectedProd==='ALL'?'':'hidden'} ${checkHighlight('818') ? 'highlight-green' : 'bg-blue-50 font-bold'}">${groupTotals['818']}</td>
+          
+          <!-- 953 -->
+          <td class="${selectedProd==='953'||selectedProd==='ALL'?'':'hidden'}">${subCounts['953_WYPALL X']}</td>
+          <td class="${selectedProd==='953'||selectedProd==='ALL'?'':'hidden'}">${subCounts['953_WYPALL L']}</td>
+          <td class="${selectedProd==='953'||selectedProd==='ALL'?'':'hidden'}">${subCounts['953_Special Wiper']}</td>
+          <td class="${selectedProd==='953'||selectedProd==='ALL'?'':'hidden'} ${checkHighlight('953') ? 'highlight-green' : 'bg-indigo-50 font-bold'}">${groupTotals['953']}</td>
+          
+          <!-- 957 -->
+          <td class="${selectedProd==='957'||selectedProd==='ALL'?'':'hidden'}">${subCounts['957_ถุงมือกันบาด']}</td>
+          <td class="${selectedProd==='957'||selectedProd==='ALL'?'':'hidden'}">${subCounts['957_Back support']}</td>
+          <td class="${selectedProd==='957'||selectedProd==='ALL'?'':'hidden'} ${checkHighlight('957') ? 'highlight-green' : 'bg-blue-50 font-bold'}">${groupTotals['957']}</td>
+          
+          <!-- 959 -->
+          <td class="${selectedProd==='959'||selectedProd==='ALL'?'':'hidden'}">${subCounts['959_Goggle']}</td>
+          <td class="${selectedProd==='959'||selectedProd==='ALL'?'':'hidden'}">${subCounts['959_Spectacle']}</td>
+          <td class="${selectedProd==='959'||selectedProd==='ALL'?'':'hidden'}">${subCounts['959_Cleaning Solution']}</td>
+          <td class="${selectedProd==='959'||selectedProd==='ALL'?'':'hidden'} ${checkHighlight('959') ? 'highlight-green' : 'bg-indigo-50 font-bold'}">${groupTotals['959']}</td>
+          
+          <!-- 962 -->
+          <td class="${selectedProd==='962'||selectedProd==='ALL'?'':'hidden'}">${subCounts['962_Speedglas']}</td>
+          <td class="${selectedProd==='962'||selectedProd==='ALL'?'':'hidden'} ${checkHighlight('962') ? 'highlight-green' : 'bg-blue-50 font-bold'}">${groupTotals['962']}</td>
+          
+          <!-- 947 -->
+          <td class="${selectedProd==='947'||selectedProd==='ALL'?'':'hidden'}">${subCounts['947_Wonder grip']}</td>
+          <td class="${selectedProd==='947'||selectedProd==='ALL'?'':'hidden'}">${subCounts['947_Protape']}</td>
+          <td class="${selectedProd==='947'||selectedProd==='ALL'?'':'hidden'} ${checkHighlight('947') ? 'highlight-green' : 'bg-indigo-50 font-bold'}">${groupTotals['947']}</td>
+        </tr>`;
+      });
+
+      // แถวสรุป Total ด้านล่างสุด
+      html += `</tbody>
+      <tfoot>
+        <tr class="bg-gray-200 font-bold text-gray-800 border-t-2 border-gray-400">
+          <td class="text-left px-3">Total</td>
+          <!-- 818 -->
+          <td class="${selectedProd==='818'||selectedProd==='ALL'?'':'hidden'}">${grandTotals['818_Nomad']}</td>
+          <td class="${selectedProd==='818'||selectedProd==='ALL'?'':'hidden'}">${grandTotals['818_Chemical']}</td>
+          <td class="${selectedProd==='818'||selectedProd==='ALL'?'':'hidden'}">${grandTotals['818_Sorbent']}</td>
+          <td class="${selectedProd==='818'||selectedProd==='ALL'?'':'hidden'}">${grandTotals['818_Safety Walk']}</td>
+          <td class="${selectedProd==='818'||selectedProd==='ALL'?'':'hidden'} bg-blue-300 font-extrabold">${grandTotals['818_TOTAL']}</td>
+          
+          <!-- 953 -->
+          <td class="${selectedProd==='953'||selectedProd==='ALL'?'':'hidden'}">${grandTotals['953_WYPALL X']}</td>
+          <td class="${selectedProd==='953'||selectedProd==='ALL'?'':'hidden'}">${grandTotals['953_WYPALL L']}</td>
+          <td class="${selectedProd==='953'||selectedProd==='ALL'?'':'hidden'}">${grandTotals['953_Special Wiper']}</td>
+          <td class="${selectedProd==='953'||selectedProd==='ALL'?'':'hidden'} bg-indigo-300 font-extrabold">${grandTotals['953_TOTAL']}</td>
+          
+          <!-- 957 -->
+          <td class="${selectedProd==='957'||selectedProd==='ALL'?'':'hidden'}">${grandTotals['957_ถุงมือกันบาด']}</td>
+          <td class="${selectedProd==='957'||selectedProd==='ALL'?'':'hidden'}">${grandTotals['957_Back support']}</td>
+          <td class="${selectedProd==='957'||selectedProd==='ALL'?'':'hidden'} bg-blue-300 font-extrabold">${grandTotals['957_TOTAL']}</td>
+          
+          <!-- 959 -->
+          <td class="${selectedProd==='959'||selectedProd==='ALL'?'':'hidden'}">${grandTotals['959_Goggle']}</td>
+          <td class="${selectedProd==='959'||selectedProd==='ALL'?'':'hidden'}">${grandTotals['959_Spectacle']}</td>
+          <td class="${selectedProd==='959'||selectedProd==='ALL'?'':'hidden'}">${grandTotals['959_Cleaning Solution']}</td>
+          <td class="${selectedProd==='959'||selectedProd==='ALL'?'':'hidden'} bg-indigo-300 font-extrabold">${grandTotals['959_TOTAL']}</td>
+          
+          <!-- 962 -->
+          <td class="${selectedProd==='962'||selectedProd==='ALL'?'':'hidden'}">${grandTotals['962_Speedglas']}</td>
+          <td class="${selectedProd==='962'||selectedProd==='ALL'?'':'hidden'} bg-blue-300 font-extrabold">${grandTotals['962_TOTAL']}</td>
+          
+          <!-- 947 -->
+          <td class="${selectedProd==='947'||selectedProd==='ALL'?'':'hidden'}">${grandTotals['947_Wonder grip']}</td>
+          <td class="${selectedProd==='947'||selectedProd==='ALL'?'':'hidden'}">${grandTotals['947_Protape']}</td>
+          <td class="${selectedProd==='947'||selectedProd==='ALL'?'':'hidden'} bg-indigo-300 font-extrabold">${grandTotals['947_TOTAL']}</td>
+        </tr>
+      </tfoot>
+      </table>`;
+
+      document.getElementById("tableContainer").innerHTML = html;
+    }
+
+    function renderDetailView(data, selectedProd) {
+      let html = `<table class="min-w-full bg-white text-xs">
+        <thead>
+          <tr class="bg-gray-200">
+            <th>ประทับเวลา</th>
+            <th>ชื่อฝ่ายขาย</th>
+            <th>Account</th>
+            <th>ชื่อลูกค้า</th>
+            <th>Quotation No.</th>
+            <th>Commodity / Product Description / Sales / Qty</th>
+          </tr>
+        </thead>
+        <tbody>`;
+
+      data.forEach(row => {
+        let detailContent = [];
+        
+        Object.keys(PRODUCT_RULES).forEach(pCode => {
+          if (selectedProd !== 'ALL' && selectedProd !== pCode) return;
+          
+          const rule = PRODUCT_RULES[pCode];
+          const comm = row[rule.colComm];
+          if (comm && comm !== "ไม่มี" && comm !== "0") {
+            detailContent.push(`[${pCode}] ${comm} - ยอดขาย: ${row[rule.colSales] || 0} บาท`);
+          }
+        });
+
+        if (detailContent.length > 0 || selectedProd === 'ALL') {
+          html += `<tr>
+            <td>${row[0] || ''}</td>
+            <td>${row[1] || ''}</td>
+            <td>${row[2] || ''}</td>
+            <td class="text-left">${row[3] || ''}</td>
+            <td>${row[4] || ''}</td>
+            <td class="text-left">${detailContent.join('<br>') || '-'}</td>
+          </tr>`;
+        }
+      });
+
+      html += `</tbody></table>`;
+      document.getElementById("tableContainer").innerHTML = html;
+    }
+
+    function setView(view) {
+      currentView = view;
+      document.getElementById("btnSummary").className = view === 'summary' 
+        ? "w-1/2 px-3 py-2 text-xs font-medium bg-blue-600 text-white rounded-l-lg border hover:bg-blue-700"
+        : "w-1/2 px-3 py-2 text-xs font-medium bg-white text-gray-700 rounded-l-lg border hover:bg-gray-100";
+      
+      document.getElementById("btnDetail").className = view === 'detail' 
+        ? "w-1/2 px-3 py-2 text-xs font-medium bg-blue-600 text-white rounded-r-lg border hover:bg-blue-700"
+        : "w-1/2 px-3 py-2 text-xs font-medium bg-white text-gray-700 rounded-r-lg border hover:bg-gray-100";
+      
+      renderTable();
+    }
+
+    function setQuarter(q) {
+      currentQuarter = q;
+      document.querySelectorAll('.q-btn').forEach(btn => {
+        btn.className = "q-btn bg-white text-gray-700 border px-2 py-2 text-xs font-bold rounded";
+      });
+      document.getElementById(`btn${q}`).className = "q-btn bg-blue-600 text-white px-2 py-2 text-xs font-bold rounded";
+      renderTable();
+    }
+
+    setInterval(fetchData, 60000);
+    fetchData();
+  </script>
+</body>
+</html>
