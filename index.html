@@ -10,14 +10,21 @@
     table th, table td { border: 1px solid #d1d5db; padding: 6px 8px; text-align: center; font-size: 11px; }
     table th { background-color: #f3f4f6; font-weight: 600; white-space: nowrap; }
     
+    /* Highlight Classes */
     .highlight-green {
       background-color: #22c55e !important;
       color: #ffffff !important;
       font-weight: 800 !important;
       box-shadow: inset 0 0 4px rgba(0,0,0,0.2);
     }
-    .row-uncounted { background-color: #fef2f2 !important; color: #991b1b !important; }
-    .row-counted { background-color: #f0fdf4 !important; color: #166534 !important; }
+    .row-uncounted {
+      background-color: #fef2f2 !important; /* Red 50 */
+      color: #991b1b !important; /* Red 800 */
+    }
+    .row-counted {
+      background-color: #f0fdf4 !important; /* Green 50 */
+      color: #166534 !important; /* Green 800 */
+    }
   </style>
 </head>
 <body class="bg-gray-100 min-h-screen p-3 sm:p-5">
@@ -27,7 +34,7 @@
     <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-3 border-b pb-4">
       <div>
         <h1 class="text-xl font-bold text-gray-800">Sales Hopper 2026 Dashboard</h1>
-        <p class="text-xs text-gray-500">ข้อมูล Real-time จาก Google Sheets (แก้ไขการแยกย่อย 953 และ Total แม่นยำ)</p>
+        <p class="text-xs text-gray-500">ข้อมูล Real-time จาก Google Sheets (ไม่นับ Commodity: other, STUNT, ไม่มี)</p>
       </div>
       <div class="flex items-center gap-2">
         <span id="statusLed" class="inline-block w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></span>
@@ -64,7 +71,7 @@
     <!-- Controls & Filters -->
     <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-5 bg-gray-50 p-4 rounded-lg">
       
-      <!-- View Toggle Buttons -->
+      <!-- Toggle Table View -->
       <div>
         <label class="block text-xs font-semibold text-gray-600 mb-1">รูปแบบการแสดงผล</label>
         <div class="inline-flex rounded-md shadow-sm w-full" role="group">
@@ -84,7 +91,7 @@
         </div>
       </div>
 
-      <!-- Filters: Product & Team -->
+      <!-- Dropdown Filters: Product & Team -->
       <div class="grid grid-cols-2 gap-2">
         <div>
           <label class="block text-xs font-semibold text-gray-600 mb-1">Product Group</label>
@@ -112,7 +119,7 @@
         </div>
       </div>
 
-      <!-- Filter: Individual Salesperson -->
+      <!-- Dropdown Filter: Individual Salesperson -->
       <div>
         <label class="block text-xs font-semibold text-gray-600 mb-1">ชื่อฝ่ายขาย (รายบุคคล)</label>
         <select id="filterSalesperson" onchange="renderTable()" class="w-full text-xs p-2 border rounded bg-white">
@@ -122,7 +129,7 @@
 
     </div>
 
-    <!-- Table Output Container -->
+    <!-- Table Container -->
     <div class="overflow-x-auto">
       <div id="tableContainer" class="text-center py-8 text-gray-500">กำลังเชื่อมต่อข้อมูล...</div>
     </div>
@@ -130,7 +137,6 @@
   </div>
 
   <script>
-    // Constants & Configuration
     const SPREADSHEET_ID = "1BllaI8KkLyiUcIHfu8cTxn4flfDC-t8mIU2LYFkGRwI";
     const GID = "600616619";
 
@@ -143,28 +149,29 @@
       "LB_RY": ["จุฑามาศ อิ่มพิทักษ์", "ศิริลักษณ์ กลิ่นหอม", "สุวรรณา รัตนาภากูล", "ธันยพัส รักษาถิ่น", "พรรณราย สุขมหาหลวง"]
     };
 
-    // กำหนดคีย์เวิร์ดของแต่ละกลุ่มย่อยแบบเฉพาะเจาะจง (Strict Non-Overlapping Rules)
     const PRODUCT_RULES = {
-      "818": { minSales: 30000, minHighlight: 6, subCols: { "Nomad": ["nomad"], "Chemical": ["chemical"], "Sorbent": ["sorbent"], "Safety Walk": ["safety walk"] } },
-      "953": { minSales: 30000, minHighlight: 6, subCols: { "WYPALL X": ["wypall x", "x80", "x70", "x60"], "WYPALL L": ["wypall l", "l40", "l30", "l20"], "Special Wiper": ["special wiper", "special wyper", "critical clean", "kimtech"] } },
-      "957": { minSales: 30000, minHighlight: 6, subCols: { "ถุงมือกันบาด": ["ถุงมือกันบาด", "กันบาด"], "Back support": ["back support", "พยุงหลัง"] } },
-      "959": { minSales: 30000, minHighlight: 6, subCols: { "Goggle": ["goggle"], "Spectacle": ["spectacle"], "Cleaning Solution": ["cleaning solution"] } },
-      "962": { minSales: 10000, minHighlight: 3, subCols: { "Speedglas": ["speedglas"] } },
-      "947": { minSales: 30000, minHighlight: 6, subCols: { "Wonder grip": ["wonder grip"], "Protape": ["protape"] } }
+      "818": { colComm: 5, colDesc: 7, colSales: 8, colQty: 9, minSales: 30000, subCols: { "Nomad": ["Nomad"], "Chemical": ["Chemical"], "Sorbent": ["Sorbent"], "Safety Walk": ["Safety Walk"] } },
+      "953": { colComm: 10, colDesc: 12, colSales: 13, colQty: 14, minSales: 30000, subCols: { "WYPALL X": ["WYPALL X"], "WYPALL L": ["WYPALL L"], "Special Wiper": ["SPECIAL WYPER", "Special Wiper"] } },
+      "957": { colComm: 15, colDesc: 17, colSales: 18, colQty: 19, minSales: 30000, subCols: { "ถุงมือกันบาด": ["ถุงมือกันบาด", "กลุ่มถุงมือกันบาด"], "Back support": ["Back support"] } },
+      "959": { colComm: 20, colDesc: 22, colSales: 23, colQty: 24, minSales: 30000, subCols: { "Goggle": ["Goggle"], "Spectacle": ["Spectacle"], "Cleaning Solution": ["Cleaning Solution"] } },
+      "962": { colComm: 25, colDesc: 27, colSales: 28, colQty: 29, minSales: 10000, subCols: { "Speedglas": ["Speedglas", "Speedglas™"] } },
+      "947": { colComm: 30, colDesc: 32, colSales: 33, colQty: 34, minSales: 30000, subCols: { "Wonder grip": ["Wonder grip", "Wonder grip gloves"], "Protape": ["Protape", "Protape safety helmet"] } }
     };
 
-    // Global State & Dynamic Col Mapping
     let rawData = [];
-    let colMap = {};
     let currentView = 'summary';
     let currentQuarter = 'Q1';
 
-    // Data Fetching
+    // ฟังก์ชันเช็กว่า Commodity นี้ถูกยกเว้นหรือไม่ (other, STUNT, ไม่มี, 0)
+    function isExcludedCommodity(commStr) {
+      if (!commStr) return true;
+      const lower = commStr.trim().toLowerCase();
+      return lower === "" || lower === "ไม่มี" || lower === "0" || lower.includes("other") || lower.includes("stunt");
+    }
+
     function fetchData() {
-      const led = document.getElementById("statusLed");
-      const statusText = document.getElementById("lastUpdate");
-      led.className = "inline-block w-3 h-3 bg-yellow-500 rounded-full animate-pulse";
-      statusText.innerText = "กำลังดึงข้อมูล...";
+      document.getElementById("statusLed").className = "inline-block w-3 h-3 bg-yellow-500 rounded-full animate-pulse";
+      document.getElementById("lastUpdate").innerText = "กำลังดึงข้อมูล...";
 
       const oldScript = document.getElementById("jsonpScript");
       if (oldScript) oldScript.remove();
@@ -172,48 +179,22 @@
       const script = document.createElement('script');
       script.id = "jsonpScript";
       script.src = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?gid=${GID}&tqx=responseHandler:googleDocCallback`;
-      script.onerror = () => {
-        document.getElementById("tableContainer").innerHTML = `<p class='text-red-500 font-bold py-4'>ไม่สามารถโหลดข้อมูลได้ กรุณาตรวจสอบการตั้งค่าแชร์ของ Google Sheets</p>`;
+      
+      script.onerror = function() {
+        document.getElementById("tableContainer").innerHTML = `<p class='text-red-500 font-bold py-4'>ไม่สามารถโหลดข้อมูลได้ กรุณาตรวจสอบการตั้งค่าการแชร์ของ Google Sheets</p>`;
       };
 
       document.body.appendChild(script);
     }
 
-    // Google Callback Handling (Dynamic Header Matching)
     window.googleDocCallback = function(json) {
-      if (!json?.table?.rows || !json?.table?.cols) {
+      if (!json || !json.table || !json.table.rows) {
         document.getElementById("tableContainer").innerHTML = `<p class='text-red-500 font-bold py-4'>ไม่พบโครงสร้างข้อมูลในชีต</p>`;
         return;
       }
 
-      // ดึงชื่อ Header ทั้งหมดจาก Google Sheets
-      const headers = json.table.cols.map(col => (col?.label || col?.id || "").trim());
-
-      // ค้นหาตำแหน่ง Index ของแต่ละคอลัมน์โดยอัตโนมัติจากชื่อ Header
-      colMap = {
-        timestamp: headers.findIndex(h => h.includes("ประทับเวลา")),
-        salesName: headers.findIndex(h => h.includes("ชื่อฝ่ายขาย")),
-        accountId: headers.findIndex(h => h.includes("Account")),
-        clientName: headers.findIndex(h => h.includes("ชื่อลูกค้า")),
-        quoteNo: headers.findIndex(h => h.includes("Quotation No") || h.includes("ใบเสนอราคา")),
-        products: {}
-      };
-
-      Object.keys(PRODUCT_RULES).forEach(pCode => {
-        colMap.products[pCode] = {
-          colComm: headers.findIndex(h => h.includes(`${pCode} Commodity`)),
-          colDesc: headers.findIndex(h => h.includes(`${pCode}`) && (h.includes("Item Description") || h.includes("ชื่อรุ่นสินค้า"))),
-          colSales: headers.findIndex(h => h.includes(`${pCode}`) && (h.includes("ยอดขายต่อปี") || h.includes("บาท/ปี"))),
-          colQty: headers.findIndex(h => h.includes(`${pCode}`) && (h.includes("ปริมาณการใช้ต่อปี") || h.includes("จำนวนชิ้น")))
-        };
-      });
-
       rawData = json.table.rows.map(row => {
-        if (!row.c) return [];
-        return row.c.map(cell => {
-          if (!cell || (cell.v === null && cell.f === null)) return "";
-          return String(cell.f || cell.v || "").trim();
-        });
+        return row.c ? row.c.map(cell => (cell && cell.v !== null && cell.v !== undefined) ? String(cell.f || cell.v) : "") : [];
       });
 
       populateSalesDropdown();
@@ -222,86 +203,27 @@
       renderTable();
     };
 
-    // Helper Functions
-    function parseSalesValue(valStr) {
-      return parseFloat((valStr || "0").replace(/,/g, '')) || 0;
-    }
-
-    function checkQuarter(dateStr, q) {
-      if (!dateStr) return false;
-      const parts = dateStr.split(',')[0].split('/');
-      if (parts.length < 3) return false;
-      
-      const [day, month, year] = parts.map(n => parseInt(n));
-      if (isNaN(day) || isNaN(month) || isNaN(year)) return true;
-
-      const dateObj = new Date(year < 100 ? 2000 + year : year, month - 1, day);
-
-      const qBounds = {
-        'Q1': dateObj <= new Date(2026, 3, 1),
-        'Q2': dateObj > new Date(2026, 3, 1) && dateObj <= new Date(2026, 5, 30),
-        'Q3': dateObj >= new Date(2026, 6, 1) && dateObj <= new Date(2026, 8, 30),
-        'Q4': dateObj >= new Date(2026, 9, 1) && dateObj <= new Date(2026, 11, 31)
-      };
-
-      return qBounds[q] ?? true;
-    }
-
-    // ฟังก์ชันระบุกลุ่มย่อยของสินค้าที่แม่นยำที่สุด
-    function matchSubCategory(pCode, normComm) {
-      const subCols = PRODUCT_RULES[pCode].subCols;
-      for (const [subCatName, keywords] of Object.entries(subCols)) {
-        if (keywords.some(kw => normComm.includes(kw))) {
-          return subCatName;
-        }
-      }
-      // กรณีไม่เจอกลุ่มย่อยเฉพาะ ให้คืนค่ากลุ่มแรกไว้เป็นค่าเริ่มต้นกรณีที่เป็นสินค้ากลุ่มนั้นๆ
-      return Object.keys(subCols)[0];
-    }
-
-    function evalHopperStatus(salesName, accountId, pCode, comm, salesVal, trackedKeys) {
-      const rule = PRODUCT_RULES[pCode];
-      const normComm = comm.toLowerCase();
-
-      if (!comm || comm === "ไม่มี" || comm === "0") return { hasData: false };
-
-      if (normComm.includes("stunt")) {
-        return { hasData: true, isCounted: false, reason: "❌ ไม่ถูกนับ (Commodity เป็น STUNT)" };
-      }
-
-      if (normComm.includes("other")) {
-        return { hasData: true, isCounted: false, reason: "❌ ไม่ถูกนับ (Commodity เป็น Other)" };
-      }
-
-      if (salesVal < rule.minSales) {
-        return { hasData: true, isCounted: false, reason: `❌ ไม่ถูกนับ (ยอดขาย < ${rule.minSales.toLocaleString()} บาท)` };
-      }
-
-      const uniqueKey = `${salesName}_${accountId}_${pCode}_${normComm}`;
-      if (trackedKeys.has(uniqueKey)) {
-        return { hasData: true, isCounted: false, reason: "❌ ไม่ถูกนับ (Account ซ้ำใน Commodity นี้)" };
-      }
-
-      trackedKeys.add(uniqueKey);
-      return { hasData: true, isCounted: true, reason: "✅ ถูกนับ" };
-    }
-
-    // Dropdown Handlers
     function populateSalesDropdown() {
       const selectSales = document.getElementById("filterSalesperson");
-      const selectedTeam = document.getElementById("filterTeam").value;
       const currentSelected = selectSales.value;
+      const selectedTeam = document.getElementById("filterTeam").value;
 
-      const salesList = selectedTeam === 'ALL'
-        ? Object.values(TEAMS).flat()
-        : TEAMS[selectedTeam] || [];
+      let salesList = new Set();
+      if (selectedTeam === 'ALL') {
+        Object.values(TEAMS).forEach(list => list.forEach(name => salesList.add(name)));
+      } else {
+        (TEAMS[selectedTeam] || []).forEach(name => salesList.add(name));
+      }
 
       selectSales.innerHTML = `<option value="ALL">ทุกคน</option>`;
-      [...new Set(salesList)].sort().forEach(name => {
-        selectSales.add(new Option(name, name));
+      Array.from(salesList).sort().forEach(name => {
+        const option = document.createElement('option');
+        option.value = name;
+        option.innerText = name;
+        selectSales.appendChild(option);
       });
 
-      selectSales.value = salesList.includes(currentSelected) ? currentSelected : "ALL";
+      selectSales.value = salesList.has(currentSelected) ? currentSelected : "ALL";
     }
 
     function onTeamChange() {
@@ -309,24 +231,42 @@
       renderTable();
     }
 
-    // Main Render Pipeline
+    function checkQuarter(dateStr, q) {
+      if (!dateStr) return false;
+      const parts = dateStr.split(',')[0].split('/');
+      if (parts.length < 3) return false;
+      const day = parseInt(parts[0]);
+      const month = parseInt(parts[1]);
+      const year = parseInt(parts[2]);
+
+      const dateObj = new Date(year < 100 ? 2000 + year : year, month - 1, day);
+
+      if (q === 'Q1') {
+        return dateObj <= new Date(2026, 3, 1);
+      } else if (q === 'Q2') {
+        return dateObj > new Date(2026, 3, 1) && dateObj <= new Date(2026, 5, 30);
+      } else if (q === 'Q3') {
+        return dateObj >= new Date(2026, 6, 1) && dateObj <= new Date(2026, 8, 30);
+      } else if (q === 'Q4') {
+        return dateObj >= new Date(2026, 9, 1) && dateObj <= new Date(2026, 11, 31);
+      }
+      return true;
+    }
+
     function renderTable() {
       const selectedProd = document.getElementById("filterProduct").value;
       const selectedTeam = document.getElementById("filterTeam").value;
       const selectedSales = document.getElementById("filterSalesperson").value;
 
-      const cSalesNameIdx = colMap.salesName >= 0 ? colMap.salesName : 1;
-      const cTimestampIdx = colMap.timestamp >= 0 ? colMap.timestamp : 0;
-
-      let filtered = rawData.filter(row => checkQuarter(row[cTimestampIdx], currentQuarter));
+      let filtered = rawData.filter(row => checkQuarter(row[0], currentQuarter));
 
       if (selectedTeam !== 'ALL') {
         const teamMembers = TEAMS[selectedTeam] || [];
-        filtered = filtered.filter(row => teamMembers.includes(row[cSalesNameIdx]));
+        filtered = filtered.filter(row => teamMembers.includes(row[1]));
       }
 
       if (selectedSales !== 'ALL') {
-        filtered = filtered.filter(row => row[cSalesNameIdx] === selectedSales);
+        filtered = filtered.filter(row => row[1] === selectedSales);
       }
 
       calculateKpiCards(filtered, selectedProd);
@@ -339,31 +279,47 @@
     }
 
     function calculateKpiCards(data, selectedProd) {
-      let totalCounted = 0, totalUncounted = 0, totalSalesVal = 0;
-      const trackedKeys = new Set();
-      const cSalesNameIdx = colMap.salesName >= 0 ? colMap.salesName : 1;
-      const cAccountIdIdx = colMap.accountId >= 0 ? colMap.accountId : 2;
+      let totalCounted = 0;
+      let totalUncounted = 0;
+      let totalSalesVal = 0;
+      const globalTrackedKeys = new Set();
 
       data.forEach(row => {
-        const salesName = row[cSalesNameIdx];
-        const accountId = row[cAccountIdIdx] || "";
+        const salesName = row[1];
+        const accountId = row[2] || "";
 
         Object.keys(PRODUCT_RULES).forEach(pCode => {
           if (selectedProd !== 'ALL' && selectedProd !== pCode) return;
 
-          const pMap = colMap.products[pCode];
-          if (!pMap || pMap.colComm < 0) return;
+          const rule = PRODUCT_RULES[pCode];
+          const comm = row[rule.colComm] || "";
+          const salesVal = parseFloat((row[rule.colSales] || "0").replace(/,/g, ''));
 
-          const comm = (row[pMap.colComm] || "").trim();
-          const salesVal = parseSalesValue(row[pMap.colSales]);
-
-          const status = evalHopperStatus(salesName, accountId, pCode, comm, salesVal, trackedKeys);
-          if (status.hasData) {
-            if (status.isCounted) {
-              totalCounted++;
-              totalSalesVal += salesVal;
+          if (comm && comm !== "0") {
+            if (isExcludedCommodity(comm)) {
+              totalUncounted++; // ตกเงื่อนไข other, STUNT, ไม่มี
             } else {
-              totalUncounted++;
+              let isMatchedGroup = false;
+              Object.keys(rule.subCols).forEach(subCat => {
+                if (rule.subCols[subCat].some(kw => comm.toLowerCase().includes(kw.toLowerCase()))) {
+                  isMatchedGroup = true;
+                }
+              });
+
+              if (isMatchedGroup) {
+                if (salesVal >= rule.minSales) {
+                  const uniqueKey = `${salesName}_${accountId}_${pCode}_${comm.trim().toLowerCase()}`;
+                  if (!globalTrackedKeys.has(uniqueKey)) {
+                    globalTrackedKeys.add(uniqueKey);
+                    totalCounted++;
+                    totalSalesVal += salesVal;
+                  } else {
+                    totalUncounted++; // Account ซ้ำ
+                  }
+                } else {
+                  totalUncounted++; // ยอดขายไม่ถึงเกณฑ์
+                }
+              }
             }
           }
         });
@@ -375,79 +331,14 @@
     }
 
     function renderSummaryView(data, selectedProd, selectedTeam, selectedSales) {
-      const salesList = selectedSales !== 'ALL' ? [selectedSales]
-                      : selectedTeam !== 'ALL' ? TEAMS[selectedTeam] || []
-                      : Object.values(TEAMS).flat();
-
-      const pCodes = Object.keys(PRODUCT_RULES);
-      let grandTotals = {};
-      pCodes.forEach(p => {
-        Object.keys(PRODUCT_RULES[p].subCols).forEach(sub => grandTotals[`${p}_${sub}`] = 0);
-        grandTotals[`${p}_TOTAL`] = 0;
-      });
-
-      const cSalesNameIdx = colMap.salesName >= 0 ? colMap.salesName : 1;
-      const cAccountIdIdx = colMap.accountId >= 0 ? colMap.accountId : 2;
-
-      let tbodyHtml = salesList.map(salesName => {
-        const salesRows = data.filter(r => r[cSalesNameIdx] === salesName);
-        let subCounts = {};
-        pCodes.forEach(p => {
-          Object.keys(PRODUCT_RULES[p].subCols).forEach(sub => subCounts[`${p}_${sub}`] = 0);
-        });
-
-        const trackedKeys = new Set();
-
-        salesRows.forEach(row => {
-          const accountId = row[cAccountIdIdx] || "";
-          pCodes.forEach(pCode => {
-            const rule = PRODUCT_RULES[pCode];
-            const pMap = colMap.products[pCode];
-            if (!pMap || pMap.colComm < 0) return;
-
-            const comm = (row[pMap.colComm] || "").trim();
-            const salesVal = parseSalesValue(row[pMap.colSales]);
-            const normComm = comm.toLowerCase();
-
-            if (!comm || comm === "ไม่มี" || comm === "0" || normComm.includes("stunt") || normComm.includes("other") || salesVal < rule.minSales) return;
-
-            // ค้นหากลุ่มย่อยแบบตรงตัว
-            const targetSubCat = matchSubCategory(pCode, normComm);
-            const uniqueKey = `${salesName}_${accountId}_${pCode}_${normComm}`;
-
-            if (!trackedKeys.has(uniqueKey)) {
-              trackedKeys.add(uniqueKey);
-              subCounts[`${pCode}_${targetSubCat}`]++;
-              grandTotals[`${pCode}_${targetSubCat}`]++;
-            }
-          });
-        });
-
-        let rowColsHtml = pCodes.map(pCode => {
-          const isHidden = selectedProd !== 'ALL' && selectedProd !== pCode ? 'hidden' : '';
-          const subCats = Object.keys(PRODUCT_RULES[pCode].subCols);
-          
-          // คำนวณยอดรวม Total ของหมวดสินค้านั้นๆ จากผลรวมช่องย่อย
-          const categoryGroupTotal = subCats.reduce((sum, sub) => sum + subCounts[`${pCode}_${sub}`], 0);
-          grandTotals[`${pCode}_TOTAL`] += categoryGroupTotal;
-
-          const hasAll = subCats.every(sub => subCounts[`${pCode}_${sub}`] > 0);
-          const isHighlighted = hasAll && categoryGroupTotal >= PRODUCT_RULES[pCode].minHighlight;
-          const totalBg = isHighlighted ? 'highlight-green' : 'bg-blue-50 font-bold';
-
-          const subCells = subCats.map(sub => `<td class="${isHidden}">${subCounts[`${pCode}_${sub}`]}</td>`).join('');
-          return `${subCells}<td class="${isHidden} ${totalBg}">${categoryGroupTotal}</td>`;
-        }).join('');
-
-        return `<tr><td class="font-medium text-left px-3">${salesName}</td>${rowColsHtml}</tr>`;
-      }).join('');
-
-      let tfootColsHtml = pCodes.map(pCode => {
-        const isHidden = selectedProd !== 'ALL' && selectedProd !== pCode ? 'hidden' : '';
-        const subCats = Object.keys(PRODUCT_RULES[pCode].subCols);
-        const subCells = subCats.map(sub => `<td class="${isHidden}">${grandTotals[`${pCode}_${sub}`]}</td>`).join('');
-        return `${subCells}<td class="${isHidden} bg-blue-300 font-extrabold">${grandTotals[`${pCode}_TOTAL`]}</td>`;
-      }).join('');
+      let salesList = [];
+      if (selectedSales !== 'ALL') {
+        salesList = [selectedSales];
+      } else if (selectedTeam !== 'ALL') {
+        salesList = TEAMS[selectedTeam] || [];
+      } else {
+        Object.values(TEAMS).forEach(list => salesList.push(...list));
+      }
 
       let html = `<table class="min-w-full bg-white">
         <thead>
@@ -467,91 +358,174 @@
             <th class="${selectedProd==='818'||selectedProd==='ALL'?'':'hidden'}">Sorbent</th>
             <th class="${selectedProd==='818'||selectedProd==='ALL'?'':'hidden'}">Safety Walk</th>
             <th class="${selectedProd==='818'||selectedProd==='ALL'?'':'hidden'} bg-blue-200 font-bold">Total 818</th>
+            
             <!-- 953 -->
             <th class="${selectedProd==='953'||selectedProd==='ALL'?'':'hidden'}">WYPALL X</th>
             <th class="${selectedProd==='953'||selectedProd==='ALL'?'':'hidden'}">WYPALL L</th>
             <th class="${selectedProd==='953'||selectedProd==='ALL'?'':'hidden'}">Special Wiper</th>
             <th class="${selectedProd==='953'||selectedProd==='ALL'?'':'hidden'} bg-indigo-200 font-bold">Total 953</th>
+            
             <!-- 957 -->
             <th class="${selectedProd==='957'||selectedProd==='ALL'?'':'hidden'}">ถุงมือกันบาด</th>
             <th class="${selectedProd==='957'||selectedProd==='ALL'?'':'hidden'}">Back support</th>
             <th class="${selectedProd==='957'||selectedProd==='ALL'?'':'hidden'} bg-blue-200 font-bold">Total 957</th>
+            
             <!-- 959 -->
             <th class="${selectedProd==='959'||selectedProd==='ALL'?'':'hidden'}">Goggle</th>
             <th class="${selectedProd==='959'||selectedProd==='ALL'?'':'hidden'}">Spectacle</th>
             <th class="${selectedProd==='959'||selectedProd==='ALL'?'':'hidden'}">Cleaning Solution</th>
             <th class="${selectedProd==='959'||selectedProd==='ALL'?'':'hidden'} bg-indigo-200 font-bold">Total 959</th>
+            
             <!-- 962 -->
             <th class="${selectedProd==='962'||selectedProd==='ALL'?'':'hidden'}">Speedglas</th>
             <th class="${selectedProd==='962'||selectedProd==='ALL'?'':'hidden'} bg-blue-200 font-bold">Total 962</th>
+            
             <!-- 947 -->
             <th class="${selectedProd==='947'||selectedProd==='ALL'?'':'hidden'}">Wonder grip</th>
             <th class="${selectedProd==='947'||selectedProd==='ALL'?'':'hidden'}">Protape</th>
             <th class="${selectedProd==='947'||selectedProd==='ALL'?'':'hidden'} bg-indigo-200 font-bold">Total 947</th>
           </tr>
         </thead>
-        <tbody>${tbodyHtml}</tbody>
-        <tfoot>
-          <tr class="bg-gray-200 font-bold text-gray-800 border-t-2 border-gray-400">
-            <td class="text-left px-3">Total</td>${tfootColsHtml}
-          </tr>
-        </tfoot>
+        <tbody>`;
+
+      let grandTotals = {};
+      Object.keys(PRODUCT_RULES).forEach(pCode => {
+        Object.keys(PRODUCT_RULES[pCode].subCols).forEach(subCat => {
+          grandTotals[`${pCode}_${subCat}`] = 0;
+        });
+        grandTotals[`${pCode}_TOTAL`] = 0;
+      });
+
+      salesList.forEach(salesName => {
+        const salesRows = data.filter(r => r[1] === salesName);
+        let subCounts = {};
+        let groupTotals = { "818": 0, "953": 0, "957": 0, "959": 0, "962": 0, "947": 0 };
+
+        Object.keys(PRODUCT_RULES).forEach(pCode => {
+          Object.keys(PRODUCT_RULES[pCode].subCols).forEach(subCat => {
+            subCounts[`${pCode}_${subCat}`] = 0;
+          });
+        });
+
+        const trackedKeys = new Set();
+
+        salesRows.forEach(row => {
+          const accountId = row[2] || "";
+
+          Object.keys(PRODUCT_RULES).forEach(pCode => {
+            const rule = PRODUCT_RULES[pCode];
+            const comm = row[rule.colComm] || "";
+            const salesVal = parseFloat((row[rule.colSales] || "0").replace(/,/g, ''));
+
+            if (!isExcludedCommodity(comm) && salesVal >= rule.minSales) {
+              Object.keys(rule.subCols).forEach(subCat => {
+                const keywords = rule.subCols[subCat];
+                const isMatch = keywords.some(kw => comm.toLowerCase().includes(kw.toLowerCase()));
+
+                if (isMatch) {
+                  const uniqueKey = `${salesName}_${accountId}_${pCode}_${subCat}_${comm.trim().toLowerCase()}`;
+                  if (!trackedKeys.has(uniqueKey)) {
+                    trackedKeys.add(uniqueKey);
+                    subCounts[`${pCode}_${subCat}`]++;
+                    groupTotals[pCode]++;
+                    grandTotals[`${pCode}_${subCat}`]++;
+                    grandTotals[`${pCode}_TOTAL`]++;
+                  }
+                }
+              });
+            }
+          });
+        });
+
+        function checkHighlight(pCode) {
+          const subCats = Object.keys(PRODUCT_RULES[pCode].subCols);
+          const hasAllCommodities = subCats.every(subCat => subCounts[`${pCode}_${subCat}`] > 0);
+          const minRequired = (pCode === '962') ? 3 : 6;
+          return hasAllCommodities && (groupTotals[pCode] >= minRequired);
+        }
+
+        html += `<tr>
+          <td class="font-medium text-left px-3">${salesName}</td>
+          <!-- 818 -->
+          <td class="${selectedProd==='818'||selectedProd==='ALL'?'':'hidden'}">${subCounts['818_Nomad']}</td>
+          <td class="${selectedProd==='818'||selectedProd==='ALL'?'':'hidden'}">${subCounts['818_Chemical']}</td>
+          <td class="${selectedProd==='818'||selectedProd==='ALL'?'':'hidden'}">${subCounts['818_Sorbent']}</td>
+          <td class="${selectedProd==='818'||selectedProd==='ALL'?'':'hidden'}">${subCounts['818_Safety Walk']}</td>
+          <td class="${selectedProd==='818'||selectedProd==='ALL'?'':'hidden'} ${checkHighlight('818') ? 'highlight-green' : 'bg-blue-50 font-bold'}">${groupTotals['818']}</td>
+          
+          <!-- 953 -->
+          <td class="${selectedProd==='953'||selectedProd==='ALL'?'':'hidden'}">${subCounts['953_WYPALL X']}</td>
+          <td class="${selectedProd==='953'||selectedProd==='ALL'?'':'hidden'}">${subCounts['953_WYPALL L']}</td>
+          <td class="${selectedProd==='953'||selectedProd==='ALL'?'':'hidden'}">${subCounts['953_Special Wiper']}</td>
+          <td class="${selectedProd==='953'||selectedProd==='ALL'?'':'hidden'} ${checkHighlight('953') ? 'highlight-green' : 'bg-indigo-50 font-bold'}">${groupTotals['953']}</td>
+          
+          <!-- 957 -->
+          <td class="${selectedProd==='957'||selectedProd==='ALL'?'':'hidden'}">${subCounts['957_ถุงมือกันบาด']}</td>
+          <td class="${selectedProd==='957'||selectedProd==='ALL'?'':'hidden'}">${subCounts['957_Back support']}</td>
+          <td class="${selectedProd==='957'||selectedProd==='ALL'?'':'hidden'} ${checkHighlight('957') ? 'highlight-green' : 'bg-blue-50 font-bold'}">${groupTotals['957']}</td>
+          
+          <!-- 959 -->
+          <td class="${selectedProd==='959'||selectedProd==='ALL'?'':'hidden'}">${subCounts['959_Goggle']}</td>
+          <td class="${selectedProd==='959'||selectedProd==='ALL'?'':'hidden'}">${subCounts['959_Spectacle']}</td>
+          <td class="${selectedProd==='959'||selectedProd==='ALL'?'':'hidden'}">${subCounts['959_Cleaning Solution']}</td>
+          <td class="${selectedProd==='959'||selectedProd==='ALL'?'':'hidden'} ${checkHighlight('959') ? 'highlight-green' : 'bg-indigo-50 font-bold'}">${groupTotals['959']}</td>
+          
+          <!-- 962 -->
+          <td class="${selectedProd==='962'||selectedProd==='ALL'?'':'hidden'}">${subCounts['962_Speedglas']}</td>
+          <td class="${selectedProd==='962'||selectedProd==='ALL'?'':'hidden'} ${checkHighlight('962') ? 'highlight-green' : 'bg-blue-50 font-bold'}">${groupTotals['962']}</td>
+          
+          <!-- 947 -->
+          <td class="${selectedProd==='947'||selectedProd==='ALL'?'':'hidden'}">${subCounts['947_Wonder grip']}</td>
+          <td class="${selectedProd==='947'||selectedProd==='ALL'?'':'hidden'}">${subCounts['947_Protape']}</td>
+          <td class="${selectedProd==='947'||selectedProd==='ALL'?'':'hidden'} ${checkHighlight('947') ? 'highlight-green' : 'bg-indigo-50 font-bold'}">${groupTotals['947']}</td>
+        </tr>`;
+      });
+
+      // แถวสรุป Total ด้านล่างสุด
+      html += `</tbody>
+      <tfoot>
+        <tr class="bg-gray-200 font-bold text-gray-800 border-t-2 border-gray-400">
+          <td class="text-left px-3">Total</td>
+          <!-- 818 -->
+          <td class="${selectedProd==='818'||selectedProd==='ALL'?'':'hidden'}">${grandTotals['818_Nomad']}</td>
+          <td class="${selectedProd==='818'||selectedProd==='ALL'?'':'hidden'}">${grandTotals['818_Chemical']}</td>
+          <td class="${selectedProd==='818'||selectedProd==='ALL'?'':'hidden'}">${grandTotals['818_Sorbent']}</td>
+          <td class="${selectedProd==='818'||selectedProd==='ALL'?'':'hidden'}">${grandTotals['818_Safety Walk']}</td>
+          <td class="${selectedProd==='818'||selectedProd==='ALL'?'':'hidden'} bg-blue-300 font-extrabold">${grandTotals['818_TOTAL']}</td>
+          
+          <!-- 953 -->
+          <td class="${selectedProd==='953'||selectedProd==='ALL'?'':'hidden'}">${grandTotals['953_WYPALL X']}</td>
+          <td class="${selectedProd==='953'||selectedProd==='ALL'?'':'hidden'}">${grandTotals['953_WYPALL L']}</td>
+          <td class="${selectedProd==='953'||selectedProd==='ALL'?'':'hidden'}">${grandTotals['953_Special Wiper']}</td>
+          <td class="${selectedProd==='953'||selectedProd==='ALL'?'':'hidden'} bg-indigo-300 font-extrabold">${grandTotals['953_TOTAL']}</td>
+          
+          <!-- 957 -->
+          <td class="${selectedProd==='957'||selectedProd==='ALL'?'':'hidden'}">${grandTotals['957_ถุงมือกันบาด']}</td>
+          <td class="${selectedProd==='957'||selectedProd==='ALL'?'':'hidden'}">${grandTotals['957_Back support']}</td>
+          <td class="${selectedProd==='957'||selectedProd==='ALL'?'':'hidden'} bg-blue-300 font-extrabold">${grandTotals['957_TOTAL']}</td>
+          
+          <!-- 959 -->
+          <td class="${selectedProd==='959'||selectedProd==='ALL'?'':'hidden'}">${grandTotals['959_Goggle']}</td>
+          <td class="${selectedProd==='959'||selectedProd==='ALL'?'':'hidden'}">${grandTotals['959_Spectacle']}</td>
+          <td class="${selectedProd==='959'||selectedProd==='ALL'?'':'hidden'}">${grandTotals['959_Cleaning Solution']}</td>
+          <td class="${selectedProd==='959'||selectedProd==='ALL'?'':'hidden'} bg-indigo-300 font-extrabold">${grandTotals['959_TOTAL']}</td>
+          
+          <!-- 962 -->
+          <td class="${selectedProd==='962'||selectedProd==='ALL'?'':'hidden'}">${grandTotals['962_Speedglas']}</td>
+          <td class="${selectedProd==='962'||selectedProd==='ALL'?'':'hidden'} bg-blue-300 font-extrabold">${grandTotals['962_TOTAL']}</td>
+          
+          <!-- 947 -->
+          <td class="${selectedProd==='947'||selectedProd==='ALL'?'':'hidden'}">${grandTotals['947_Wonder grip']}</td>
+          <td class="${selectedProd==='947'||selectedProd==='ALL'?'':'hidden'}">${grandTotals['947_Protape']}</td>
+          <td class="${selectedProd==='947'||selectedProd==='ALL'?'':'hidden'} bg-indigo-300 font-extrabold">${grandTotals['947_TOTAL']}</td>
+        </tr>
+      </tfoot>
       </table>`;
 
       document.getElementById("tableContainer").innerHTML = html;
     }
 
-    // Detail View
     function renderDetailView(data, selectedProd) {
-      let rowsHtml = "";
-      const trackedKeys = new Set();
-
-      const cTimestampIdx = colMap.timestamp >= 0 ? colMap.timestamp : 0;
-      const cSalesNameIdx = colMap.salesName >= 0 ? colMap.salesName : 1;
-      const cAccountIdIdx = colMap.accountId >= 0 ? colMap.accountId : 2;
-      const cClientNameIdx = colMap.clientName >= 0 ? colMap.clientName : 3;
-      const cQuoteNoIdx = colMap.quoteNo >= 0 ? colMap.quoteNo : 4;
-
-      data.forEach(row => {
-        const timestamp = row[cTimestampIdx] || '';
-        const salesName = row[cSalesNameIdx] || '';
-        const accountId = row[cAccountIdIdx] || '';
-        const clientName = row[cClientNameIdx] || '';
-        const quoteNo = row[cQuoteNoIdx] || '';
-
-        Object.keys(PRODUCT_RULES).forEach(pCode => {
-          if (selectedProd !== 'ALL' && selectedProd !== pCode) return;
-
-          const pMap = colMap.products[pCode];
-          if (!pMap || pMap.colComm < 0) return;
-
-          const comm = (row[pMap.colComm] || '').trim();
-          const desc = (row[pMap.colDesc] || '').trim();
-          const qtyStr = row[pMap.colQty] || '-';
-          const salesVal = parseSalesValue(row[pMap.colSales]);
-
-          const status = evalHopperStatus(salesName, accountId, pCode, comm, salesVal, trackedKeys);
-
-          if (status.hasData) {
-            const rowClass = status.isCounted ? "row-counted" : "row-uncounted font-semibold";
-            const combinedCommDesc = (desc && desc !== "0") ? `${comm} - ${desc}` : comm;
-
-            rowsHtml += `<tr class="${rowClass}">
-              <td>${timestamp}</td>
-              <td>${salesName}</td>
-              <td>${accountId}</td>
-              <td class="text-left px-2">${clientName}</td>
-              <td>${quoteNo}</td>
-              <td class="font-bold">${pCode}</td>
-              <td class="text-left px-2">${combinedCommDesc}</td>
-              <td class="text-right px-2">${salesVal > 0 ? salesVal.toLocaleString() : '0'}</td>
-              <td>${qtyStr}</td>
-              <td class="font-bold px-2">${status.reason}</td>
-            </tr>`;
-          }
-        });
-      });
-
       let html = `<table class="min-w-full bg-white text-xs">
         <thead>
           <tr class="bg-gray-200 text-gray-800">
@@ -561,19 +535,79 @@
             <th>ชื่อลูกค้า</th>
             <th>Quotation No.</th>
             <th>หมวดสินค้า</th>
-            <th>Commodity & Description</th>
+            <th>Commodity</th>
+            <th>ชื่อรุ่นสินค้า (Description)</th>
             <th>ยอดขายต่อปี (บาท)</th>
             <th>ปริมาณใช้ต่อปี</th>
             <th>สถานะการนับ</th>
           </tr>
         </thead>
-        <tbody>${rowsHtml}</tbody>
-      </table>`;
+        <tbody>`;
 
+      const trackedKeys = new Set();
+
+      data.forEach(row => {
+        const timestamp = row[0] || '';
+        const salesName = row[1] || '';
+        const accountId = row[2] || '';
+        const clientName = row[3] || '';
+        const quoteNo = row[4] || '';
+
+        Object.keys(PRODUCT_RULES).forEach(pCode => {
+          if (selectedProd !== 'ALL' && selectedProd !== pCode) return;
+
+          const rule = PRODUCT_RULES[pCode];
+          const comm = row[rule.colComm] || '';
+          const desc = row[rule.colDesc] || '';
+          const salesStr = row[rule.colSales] || '0';
+          const qtyStr = row[rule.colQty] || '-';
+          const salesVal = parseFloat(salesStr.replace(/,/g, ''));
+
+          if (comm && comm !== "0") {
+            let isCounted = false;
+            let statusText = "";
+
+            if (isExcludedCommodity(comm)) {
+              isCounted = false;
+              statusText = "❌ ไม่ถูกนับ (Commodity เป็น other / STUNT / ไม่มี)";
+            } else if (salesVal < rule.minSales) {
+              isCounted = false;
+              statusText = `❌ ไม่ถูกนับ (ยอดขาย < ${rule.minSales.toLocaleString()} บาท)`;
+            } else {
+              const uniqueKey = `${salesName}_${accountId}_${pCode}_${comm.trim().toLowerCase()}`;
+              if (trackedKeys.has(uniqueKey)) {
+                isCounted = false;
+                statusText = "❌ ไม่ถูกนับ (Account ซ้ำใน Commodity นี้)";
+              } else {
+                trackedKeys.add(uniqueKey);
+                isCounted = true;
+                statusText = "✅ ถูกนับ";
+              }
+            }
+
+            const rowClass = isCounted ? "row-counted" : "row-uncounted font-semibold";
+
+            html += `<tr class="${rowClass}">
+              <td>${timestamp}</td>
+              <td>${salesName}</td>
+              <td>${accountId}</td>
+              <td class="text-left px-2">${clientName}</td>
+              <td>${quoteNo}</td>
+              <td class="font-bold">${pCode}</td>
+              <td class="text-left px-2">${comm}</td>
+              <td class="text-left px-2">${desc || '-'}</td>
+              <td class="text-right px-2">${salesVal > 0 ? salesVal.toLocaleString() : '0'}</td>
+              <td>${qtyStr}</td>
+              <td class="font-bold px-2">${statusText}</td>
+            </tr>`;
+          }
+        });
+      });
+
+      html += `</tbody></table>`;
       document.getElementById("tableContainer").innerHTML = html;
     }
 
-    // Navigation & View Toggles
     function setView(view) {
       currentView = view;
       document.getElementById("btnSummary").className = view === 'summary' 
@@ -596,7 +630,6 @@
       renderTable();
     }
 
-    // Auto-refresh interval (every 60 seconds)
     setInterval(fetchData, 60000);
     fetchData();
   </script>
