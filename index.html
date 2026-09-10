@@ -27,7 +27,7 @@
     <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-3 border-b pb-4">
       <div>
         <h1 class="text-xl font-bold text-gray-800">Sales Hopper 2026 Dashboard</h1>
-        <p class="text-xs text-gray-500">ข้อมูล Real-time จาก Google Sheets</p>
+        <p class="text-xs text-gray-500">ข้อมูล Real-time จาก Google Sheets (แก้ไขการแสดงผลข้อความ Item Description แล้ว)</p>
       </div>
       <div class="flex items-center gap-2">
         <span id="statusLed" class="inline-block w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></span>
@@ -143,6 +143,13 @@
       "LB_RY": ["จุฑามาศ อิ่มพิทักษ์", "ศิริลักษณ์ กลิ่นหอม", "สุวรรณา รัตนาภากูล", "ธันยพัส รักษาถิ่น", "พรรณราย สุขมหาหลวง"]
     };
 
+    // ล็อกคอลัมน์ Item Description (colDesc) ตรงตาม Google Sheets:
+    // 818:  Comm=5,  Desc=7,  Sales=8,  Qty=9
+    // 953:  Comm=10, Desc=12, Sales=13, Qty=14
+    // 957:  Comm=15, Desc=17, Sales=18, Qty=19
+    // 959:  Comm=20, Desc=22, Sales=23, Qty=24
+    // 962:  Comm=25, Desc=27, Sales=28, Qty=29
+    // 947:  Comm=30, Desc=32, Sales=33, Qty=34
     const PRODUCT_RULES = {
       "818": { colComm: 5,  colDesc: 7,  colSales: 8,  colQty: 9,  minSales: 30000, minHighlight: 6, subCols: { "Nomad": ["Nomad"], "Chemical": ["Chemical"], "Sorbent": ["Sorbent"], "Safety Walk": ["Safety Walk"] } },
       "953": { colComm: 10, colDesc: 12, colSales: 13, colQty: 14, minSales: 30000, minHighlight: 6, subCols: { "WYPALL X": ["WYPALL X"], "WYPALL L": ["WYPALL L"], "Special Wiper": ["SPECIAL WYPER", "Special Wiper"] } },
@@ -177,15 +184,20 @@
       document.body.appendChild(script);
     }
 
+    // Fixed parsing logic to capture raw text values (cell.v) properly
     window.googleDocCallback = function(json) {
       if (!json?.table?.rows) {
         document.getElementById("tableContainer").innerHTML = `<p class='text-red-500 font-bold py-4'>ไม่พบโครงสร้างข้อมูลในชีต</p>`;
         return;
       }
 
-      rawData = json.table.rows.map(row => 
-        row.c ? row.c.map(cell => (cell && cell.v !== null && cell.v !== undefined) ? String(cell.f || cell.v) : "") : []
-      );
+      rawData = json.table.rows.map(row => {
+        if (!row.c) return [];
+        return row.c.map(cell => {
+          if (!cell || cell.v === null || cell.v === undefined) return "";
+          return String(cell.v).trim(); // ใช้ cell.v เป็นหลักเพื่อป้องกันข้อความภาษาไทยถูกข้าม
+        });
+      });
 
       populateSalesDropdown();
       document.getElementById("statusLed").className = "inline-block w-3 h-3 bg-green-500 rounded-full animate-pulse";
@@ -376,7 +388,6 @@
         return `<tr><td class="font-medium text-left px-3">${salesName}</td>${rowColsHtml}</tr>`;
       }).join('');
 
-      // Build TFoot
       let tfootColsHtml = pCodes.map(pCode => {
         const isHidden = selectedProd !== 'ALL' && selectedProd !== pCode ? 'hidden' : '';
         const subCats = Object.keys(PRODUCT_RULES[pCode].subCols);
