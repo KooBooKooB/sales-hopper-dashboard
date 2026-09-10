@@ -27,7 +27,7 @@
     <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-3 border-b pb-4">
       <div>
         <h1 class="text-xl font-bold text-gray-800">Sales Hopper 2026 Dashboard</h1>
-        <p class="text-xs text-gray-500">ข้อมูล Real-time จาก Google Sheets</p>
+        <p class="text-xs text-gray-500">ข้อมูล Real-time จาก Google Sheets (รวม Commodity & Description แล้ว)</p>
       </div>
       <div class="flex items-center gap-2">
         <span id="statusLed" class="inline-block w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></span>
@@ -143,7 +143,6 @@
       "LB_RY": ["จุฑามาศ อิ่มพิทักษ์", "ศิริลักษณ์ กลิ่นหอม", "สุวรรณา รัตนาภากูล", "ธันยพัส รักษาถิ่น", "พรรณราย สุขมหาหลวง"]
     };
 
-    // Index คอลัมน์ที่ถูกต้องจาก Google Sheets
     const PRODUCT_RULES = {
       "818": { colComm: 5,  colDesc: 7,  colSales: 8,  colQty: 9,  minSales: 30000, minHighlight: 6, subCols: { "Nomad": ["Nomad"], "Chemical": ["Chemical"], "Sorbent": ["Sorbent"], "Safety Walk": ["Safety Walk"] } },
       "953": { colComm: 10, colDesc: 12, colSales: 13, colQty: 14, minSales: 30000, minHighlight: 6, subCols: { "WYPALL X": ["WYPALL X"], "WYPALL L": ["WYPALL L"], "Special Wiper": ["SPECIAL WYPER", "Special Wiper"] } },
@@ -189,7 +188,6 @@
         if (!row.c) return [];
         return row.c.map(cell => {
           if (!cell || (cell.v === null && cell.f === null)) return "";
-          // ใช้ formatted string (f) เป็นหลักถ้ามี หรือใช้ v เพื่อให้อ่านวันที่และข้อความไทยได้สมบูรณ์
           return String(cell.f || cell.v || "").trim();
         });
       });
@@ -444,6 +442,7 @@
       document.getElementById("tableContainer").innerHTML = html;
     }
 
+    // Detail View: รวม Commodity & Description ไว้ในช่องเดียวกัน
     function renderDetailView(data, selectedProd) {
       let rowsHtml = "";
       const trackedKeys = new Set();
@@ -464,6 +463,10 @@
 
           if (status.hasData) {
             const rowClass = status.isCounted ? "row-counted" : "row-uncounted font-semibold";
+            
+            // การรวมข้อความ Commodity และ Description
+            const combinedCommDesc = (desc && desc !== "0") ? `${comm} - ${desc}` : comm;
+
             rowsHtml += `<tr class="${rowClass}">
               <td>${timestamp || ''}</td>
               <td>${salesName || ''}</td>
@@ -471,8 +474,7 @@
               <td class="text-left px-2">${clientName || ''}</td>
               <td>${quoteNo || ''}</td>
               <td class="font-bold">${pCode}</td>
-              <td class="text-left px-2">${comm}</td>
-              <td class="text-left px-2">${desc && desc !== "0" ? desc : '-'}</td>
+              <td class="text-left px-2">${combinedCommDesc}</td>
               <td class="text-right px-2">${salesVal > 0 ? salesVal.toLocaleString() : '0'}</td>
               <td>${qtyStr}</td>
               <td class="font-bold px-2">${status.reason}</td>
@@ -490,8 +492,7 @@
             <th>ชื่อลูกค้า</th>
             <th>Quotation No.</th>
             <th>หมวดสินค้า</th>
-            <th>Commodity</th>
-            <th>ชื่อรุ่นสินค้า (Description)</th>
+            <th>Commodity & Description</th>
             <th>ยอดขายต่อปี (บาท)</th>
             <th>ปริมาณใช้ต่อปี</th>
             <th>สถานะการนับ</th>
