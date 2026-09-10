@@ -149,6 +149,8 @@
       "LB_RY": ["จุฑามาศ อิ่มพิทักษ์", "ศิริลักษณ์ กลิ่นหอม", "สุวรรณา รัตนาภากูล", "ธันยพัส รักษาถิ่น", "พรรณราย สุขมหาหลวง"]
     };
 
+    // Mapping Column Indexes from Google Sheets:
+    // colComm: Commodity, colDesc: Item Description, colSales: Yearly Sales, colQty: Qty
     const PRODUCT_RULES = {
       "818": { colComm: 5, colDesc: 7, colSales: 8, colQty: 9, minSales: 30000, subCols: { "Nomad": ["Nomad"], "Chemical": ["Chemical"], "Sorbent": ["Sorbent"], "Safety Walk": ["Safety Walk"] } },
       "953": { colComm: 10, colDesc: 12, colSales: 13, colQty: 14, minSales: 30000, subCols: { "WYPALL X": ["WYPALL X"], "WYPALL L": ["WYPALL L"], "Special Wiper": ["SPECIAL WYPER", "Special Wiper"] } },
@@ -289,7 +291,6 @@
           const salesVal = parseFloat((row[rule.colSales] || "0").replace(/,/g, ''));
 
           if (comm && comm !== "ไม่มี" && comm !== "0") {
-            // เช็กเงื่อนไข Commodity เป็น Other
             if (comm.toLowerCase() === "other" || comm.toLowerCase().includes("other")) {
               totalUncounted++;
               return;
@@ -310,10 +311,10 @@
                   totalCounted++;
                   totalSalesVal += salesVal;
                 } else {
-                  totalUncounted++; // Account ซ้ำ
+                  totalUncounted++;
                 }
               } else {
-                totalUncounted++; // ยอดขายไม่ถึงเกณฑ์
+                totalUncounted++;
               }
             }
           }
@@ -412,7 +413,6 @@
             const comm = (row[rule.colComm] || "").trim();
             const salesVal = parseFloat((row[rule.colSales] || "0").replace(/,/g, ''));
 
-            // ไม่นับถ้า Commodity เป็น other
             if (comm.toLowerCase() === "other" || comm.toLowerCase().includes("other")) {
               return;
             }
@@ -525,6 +525,7 @@
       document.getElementById("tableContainer").innerHTML = html;
     }
 
+    // Detail View displaying exact Item Description from Google Sheet per product group
     function renderDetailView(data, selectedProd) {
       let html = `<table class="min-w-full bg-white text-xs">
         <thead>
@@ -558,7 +559,7 @@
 
           const rule = PRODUCT_RULES[pCode];
           const comm = (row[rule.colComm] || '').trim();
-          const desc = row[rule.colDesc] || '';
+          const desc = (row[rule.colDesc] || '').trim(); // ดึงจากช่อง Item Description โดยตรง
           const salesStr = row[rule.colSales] || '0';
           const qtyStr = row[rule.colQty] || '-';
           const salesVal = parseFloat(salesStr.replace(/,/g, ''));
@@ -595,7 +596,7 @@
               <td>${quoteNo}</td>
               <td class="font-bold">${pCode}</td>
               <td class="text-left px-2">${comm}</td>
-              <td class="text-left px-2">${desc || '-'}</td>
+              <td class="text-left px-2">${desc && desc !== "0" ? desc : '-'}</td>
               <td class="text-right px-2">${salesVal > 0 ? salesVal.toLocaleString() : '0'}</td>
               <td>${qtyStr}</td>
               <td class="font-bold px-2">${statusText}</td>
