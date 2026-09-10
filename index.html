@@ -27,7 +27,7 @@
     <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-3 border-b pb-4">
       <div>
         <h1 class="text-xl font-bold text-gray-800">Sales Hopper 2026 Dashboard</h1>
-        <p class="text-xs text-gray-500">ข้อมูล Real-time จาก Google Sheets (รวม Commodity & Description แล้ว)</p>
+        <p class="text-xs text-gray-500">ข้อมูล Real-time จาก Google Sheets (ไม่นับ STUNT, Other, ไม่มี)</p>
       </div>
       <div class="flex items-center gap-2">
         <span id="statusLed" class="inline-block w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></span>
@@ -223,19 +223,36 @@
       return qBounds[q] ?? true;
     }
 
+    // ปรับปรุงฟังก์ชันตรวจสอบสถานะ Hopper (เพิ่มกฎ STUNT, Other, ไม่มี)
     function evalHopperStatus(salesName, accountId, pCode, comm, salesVal, trackedKeys) {
       const rule = PRODUCT_RULES[pCode];
       const normComm = comm.toLowerCase();
 
+      // กรณีคำว่า "ไม่มี" หรือ "0" หรือค่าว่าง ➔ ไม่แสดงผล
       if (!comm || comm === "ไม่มี" || comm === "0") return { hasData: false };
-      if (normComm.includes("other")) return { hasData: true, isCounted: false, reason: "❌ ไม่ถูกนับ (Commodity เป็น Other)" };
-      if (salesVal < rule.minSales) return { hasData: true, isCounted: false, reason: `❌ ไม่ถูกนับ (ยอดขาย < ${rule.minSales.toLocaleString()} บาท)` };
 
+      // กรณีเป็น STUNT ➔ แสดงผลแต่ไม่ถูกนับ (ไฮไลท์สีแดง)
+      if (normComm.includes("stunt")) {
+        return { hasData: true, isCounted: false, reason: "❌ ไม่ถูกนับ (Commodity เป็น STUNT)" };
+      }
+
+      // กรณีเป็น Other ➔ แสดงผลแต่ไม่ถูกนับ (ไฮไลท์สีแดง)
+      if (normComm.includes("other")) {
+        return { hasData: true, isCounted: false, reason: "❌ ไม่ถูกนับ (Commodity เป็น Other)" };
+      }
+
+      // กรณี ยอดขายไม่ถึงเกณฑ์ขั้นต่ำ ➔ แสดงผลแต่ไม่ถูกนับ (ไฮไลท์สีแดง)
+      if (salesVal < rule.minSales) {
+        return { hasData: true, isCounted: false, reason: `❌ ไม่ถูกนับ (ยอดขาย < ${rule.minSales.toLocaleString()} บาท)` };
+      }
+
+      // กรณี Account ซ้ำใน Commodity เดียวกัน ➔ แสดงผลแต่ไม่ถูกนับ (ไฮไลท์สีแดง)
       const uniqueKey = `${salesName}_${accountId}_${pCode}_${normComm}`;
       if (trackedKeys.has(uniqueKey)) {
         return { hasData: true, isCounted: false, reason: "❌ ไม่ถูกนับ (Account ซ้ำใน Commodity นี้)" };
       }
 
+      // ผ่านเกณฑ์ทุกข้อ ➔ ถูกนับ (ไฮไลท์สีเขียว)
       trackedKeys.add(uniqueKey);
       return { hasData: true, isCounted: true, reason: "✅ ถูกนับ" };
     }
@@ -350,13 +367,15 @@
             const rule = PRODUCT_RULES[pCode];
             const comm = (row[rule.colComm] || "").trim();
             const salesVal = parseSalesValue(row[rule.colSales]);
+            const normComm = comm.toLowerCase();
 
-            if (comm.toLowerCase().includes("other") || salesVal < rule.minSales) return;
+            // ไม่นับกรณีเป็น STUNT, Other หรือ ยอดขายไม่ถึงเกณฑ์
+            if (normComm.includes("stunt") || normComm.includes("other") || salesVal < rule.minSales) return;
 
             Object.keys(rule.subCols).forEach(subCat => {
-              const isMatch = rule.subCols[subCat].some(kw => comm.toLowerCase().includes(kw.toLowerCase()));
+              const isMatch = rule.subCols[subCat].some(kw => normComm.includes(kw.toLowerCase()));
               if (isMatch) {
-                const uniqueKey = `${salesName}_${accountId}_${pCode}_${subCat}_${comm.toLowerCase()}`;
+                const uniqueKey = `${salesName}_${accountId}_${pCode}_${subCat}_${normComm}`;
                 if (!trackedKeys.has(uniqueKey)) {
                   trackedKeys.add(uniqueKey);
                   subCounts[`${pCode}_${subCat}`]++;
@@ -442,7 +461,7 @@
       document.getElementById("tableContainer").innerHTML = html;
     }
 
-    // Detail View: รวม Commodity & Description ไว้ในช่องเดียวกัน
+    // Detail View
     function renderDetailView(data, selectedProd) {
       let rowsHtml = "";
       const trackedKeys = new Set();
@@ -462,9 +481,8 @@
           const status = evalHopperStatus(salesName, accountId, pCode, comm, salesVal, trackedKeys);
 
           if (status.hasData) {
+            // ไฮไลท์สีแดงกรณีไม่ถูกนับ และไฮไลท์สีเขียวกรณีถูกนับ
             const rowClass = status.isCounted ? "row-counted" : "row-uncounted font-semibold";
-            
-            // การรวมข้อความ Commodity และ Description
             const combinedCommDesc = (desc && desc !== "0") ? `${comm} - ${desc}` : comm;
 
             rowsHtml += `<tr class="${rowClass}">
