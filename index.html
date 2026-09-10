@@ -27,7 +27,7 @@
     <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-3 border-b pb-4">
       <div>
         <h1 class="text-xl font-bold text-gray-800">Sales Hopper 2026 Dashboard</h1>
-        <p class="text-xs text-gray-500">ข้อมูล Real-time จาก Google Sheets (คำนวณ Total จากผลรวมย่อยของแต่ละหมวด)</p>
+        <p class="text-xs text-gray-500">ข้อมูล Real-time จาก Google Sheets (Dynamic Header Mapping)</p>
       </div>
       <div class="flex items-center gap-2">
         <span id="statusLed" class="inline-block w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></span>
@@ -144,16 +144,17 @@
     };
 
     const PRODUCT_RULES = {
-      "818": { colComm: 5,  colDesc: 7,  colSales: 8,  colQty: 9,  minSales: 30000, minHighlight: 6, subCols: { "Nomad": ["Nomad"], "Chemical": ["Chemical"], "Sorbent": ["Sorbent"], "Safety Walk": ["Safety Walk"] } },
-      "953": { colComm: 10, colDesc: 12, colSales: 13, colQty: 14, minSales: 30000, minHighlight: 6, subCols: { "WYPALL X": ["WYPALL X"], "WYPALL L": ["WYPALL L"], "Special Wiper": ["SPECIAL WYPER", "Special Wiper"] } },
-      "957": { colComm: 15, colDesc: 17, colSales: 18, colQty: 19, minSales: 30000, minHighlight: 6, subCols: { "ถุงมือกันบาด": ["ถุงมือกันบาด", "กลุ่มถุงมือกันบาด"], "Back support": ["Back support"] } },
-      "959": { colComm: 20, colDesc: 22, colSales: 23, colQty: 24, minSales: 30000, minHighlight: 6, subCols: { "Goggle": ["Goggle"], "Spectacle": ["Spectacle"], "Cleaning Solution": ["Cleaning Solution"] } },
-      "962": { colComm: 25, colDesc: 27, colSales: 28, colQty: 29, minSales: 10000, minHighlight: 3, subCols: { "Speedglas": ["Speedglas", "Speedglas™"] } },
-      "947": { colComm: 30, colDesc: 32, colSales: 33, colQty: 34, minSales: 30000, minHighlight: 6, subCols: { "Wonder grip": ["Wonder grip", "Wonder grip gloves"], "Protape": ["Protape", "Protape safety helmet"] } }
+      "818": { minSales: 30000, minHighlight: 6, subCols: { "Nomad": ["Nomad"], "Chemical": ["Chemical"], "Sorbent": ["Sorbent"], "Safety Walk": ["Safety Walk"] } },
+      "953": { minSales: 30000, minHighlight: 6, subCols: { "WYPALL X": ["WYPALL X"], "WYPALL L": ["WYPALL L"], "Special Wiper": ["SPECIAL WYPER", "Special Wiper"] } },
+      "957": { minSales: 30000, minHighlight: 6, subCols: { "ถุงมือกันบาด": ["ถุงมือกันบาด", "กลุ่มถุงมือกันบาด"], "Back support": ["Back support"] } },
+      "959": { minSales: 30000, minHighlight: 6, subCols: { "Goggle": ["Goggle"], "Spectacle": ["Spectacle"], "Cleaning Solution": ["Cleaning Solution"] } },
+      "962": { minSales: 10000, minHighlight: 3, subCols: { "Speedglas": ["Speedglas", "Speedglas™"] } },
+      "947": { minSales: 30000, minHighlight: 6, subCols: { "Wonder grip": ["Wonder grip", "Wonder grip gloves"], "Protape": ["Protape", "Protape safety helmet"] } }
     };
 
-    // State Management
+    // Global State & Dynamic Col Mapping
     let rawData = [];
+    let colMap = {}; // ตัวแปรเก็บตำแหน่ง Index คอลัมน์ที่ค้นหาได้แบบ Dynamic
     let currentView = 'summary';
     let currentQuarter = 'Q1';
 
@@ -177,13 +178,36 @@
       document.body.appendChild(script);
     }
 
-    // Google Callback Handling
+    // Google Callback Handling (Dynamic Header Matching)
     window.googleDocCallback = function(json) {
-      if (!json?.table?.rows) {
+      if (!json?.table?.rows || !json?.table?.cols) {
         document.getElementById("tableContainer").innerHTML = `<p class='text-red-500 font-bold py-4'>ไม่พบโครงสร้างข้อมูลในชีต</p>`;
         return;
       }
 
+      // 1. ดึงชื่อ Header ทั้งหมดจาก Google Sheets
+      const headers = json.table.cols.map(col => (col?.label || col?.id || "").trim());
+
+      // 2. ค้นหาตำแหน่ง Index ของแต่ละคอลัมน์โดยอัตโนมัติจากชื่อ Header
+      colMap = {
+        timestamp: headers.findIndex(h => h.includes("ประทับเวลา")),
+        salesName: headers.findIndex(h => h.includes("ชื่อฝ่ายขาย")),
+        accountId: headers.findIndex(h => h.includes("Account")),
+        clientName: headers.findIndex(h => h.includes("ชื่อลูกค้า")),
+        quoteNo: headers.findIndex(h => h.includes("Quotation No") || h.includes("ใบเสนอราคา")),
+        products: {}
+      };
+
+      Object.keys(PRODUCT_RULES).forEach(pCode => {
+        colMap.products[pCode] = {
+          colComm: headers.findIndex(h => h.includes(`${pCode} Commodity`)),
+          colDesc: headers.findIndex(h => h.includes(`${pCode}`) && (h.includes("Item Description") || h.includes("ชื่อรุ่นสินค้า"))),
+          colSales: headers.findIndex(h => h.includes(`${pCode}`) && (h.includes("ยอดขายต่อปี") || h.includes("บาท/ปี"))),
+          colQty: headers.findIndex(h => h.includes(`${pCode}`) && (h.includes("ปริมาณการใช้ต่อปี") || h.includes("จำนวนชิ้น")))
+        };
+      });
+
+      // 3. แปลง Rows ข้อมูล
       rawData = json.table.rows.map(row => {
         if (!row.c) return [];
         return row.c.map(cell => {
@@ -279,15 +303,18 @@
       const selectedTeam = document.getElementById("filterTeam").value;
       const selectedSales = document.getElementById("filterSalesperson").value;
 
-      let filtered = rawData.filter(row => checkQuarter(row[0], currentQuarter));
+      const cSalesNameIdx = colMap.salesName >= 0 ? colMap.salesName : 1;
+      const cTimestampIdx = colMap.timestamp >= 0 ? colMap.timestamp : 0;
+
+      let filtered = rawData.filter(row => checkQuarter(row[cTimestampIdx], currentQuarter));
 
       if (selectedTeam !== 'ALL') {
         const teamMembers = TEAMS[selectedTeam] || [];
-        filtered = filtered.filter(row => teamMembers.includes(row[1]));
+        filtered = filtered.filter(row => teamMembers.includes(row[cSalesNameIdx]));
       }
 
       if (selectedSales !== 'ALL') {
-        filtered = filtered.filter(row => row[1] === selectedSales);
+        filtered = filtered.filter(row => row[cSalesNameIdx] === selectedSales);
       }
 
       calculateKpiCards(filtered, selectedProd);
@@ -302,17 +329,21 @@
     function calculateKpiCards(data, selectedProd) {
       let totalCounted = 0, totalUncounted = 0, totalSalesVal = 0;
       const trackedKeys = new Set();
+      const cSalesNameIdx = colMap.salesName >= 0 ? colMap.salesName : 1;
+      const cAccountIdIdx = colMap.accountId >= 0 ? colMap.accountId : 2;
 
       data.forEach(row => {
-        const salesName = row[1];
-        const accountId = row[2] || "";
+        const salesName = row[cSalesNameIdx];
+        const accountId = row[cAccountIdIdx] || "";
 
         Object.keys(PRODUCT_RULES).forEach(pCode => {
           if (selectedProd !== 'ALL' && selectedProd !== pCode) return;
 
-          const rule = PRODUCT_RULES[pCode];
-          const comm = (row[rule.colComm] || "").trim();
-          const salesVal = parseSalesValue(row[rule.colSales]);
+          const pMap = colMap.products[pCode];
+          if (!pMap || pMap.colComm < 0) return;
+
+          const comm = (row[pMap.colComm] || "").trim();
+          const salesVal = parseSalesValue(row[pMap.colSales]);
 
           const status = evalHopperStatus(salesName, accountId, pCode, comm, salesVal, trackedKeys);
           if (status.hasData) {
@@ -343,8 +374,11 @@
         grandTotals[`${p}_TOTAL`] = 0;
       });
 
+      const cSalesNameIdx = colMap.salesName >= 0 ? colMap.salesName : 1;
+      const cAccountIdIdx = colMap.accountId >= 0 ? colMap.accountId : 2;
+
       let tbodyHtml = salesList.map(salesName => {
-        const salesRows = data.filter(r => r[1] === salesName);
+        const salesRows = data.filter(r => r[cSalesNameIdx] === salesName);
         let subCounts = {};
         pCodes.forEach(p => {
           Object.keys(PRODUCT_RULES[p].subCols).forEach(sub => subCounts[`${p}_${sub}`] = 0);
@@ -353,11 +387,14 @@
         const trackedKeys = new Set();
 
         salesRows.forEach(row => {
-          const accountId = row[2] || "";
+          const accountId = row[cAccountIdIdx] || "";
           pCodes.forEach(pCode => {
             const rule = PRODUCT_RULES[pCode];
-            const comm = (row[rule.colComm] || "").trim();
-            const salesVal = parseSalesValue(row[rule.colSales]);
+            const pMap = colMap.products[pCode];
+            if (!pMap || pMap.colComm < 0) return;
+
+            const comm = (row[pMap.colComm] || "").trim();
+            const salesVal = parseSalesValue(row[pMap.colSales]);
             const normComm = comm.toLowerCase();
 
             if (normComm.includes("stunt") || normComm.includes("other") || salesVal < rule.minSales) return;
@@ -380,7 +417,6 @@
           const isHidden = selectedProd !== 'ALL' && selectedProd !== pCode ? 'hidden' : '';
           const subCats = Object.keys(PRODUCT_RULES[pCode].subCols);
           
-          // คำนวณ Total จากผลรวมของแต่ละคอลัมน์ย่อยโดยตรง
           const categoryGroupTotal = subCats.reduce((sum, sub) => sum + subCounts[`${pCode}_${sub}`], 0);
           grandTotals[`${pCode}_TOTAL`] += categoryGroupTotal;
 
@@ -459,17 +495,29 @@
       let rowsHtml = "";
       const trackedKeys = new Set();
 
+      const cTimestampIdx = colMap.timestamp >= 0 ? colMap.timestamp : 0;
+      const cSalesNameIdx = colMap.salesName >= 0 ? colMap.salesName : 1;
+      const cAccountIdIdx = colMap.accountId >= 0 ? colMap.accountId : 2;
+      const cClientNameIdx = colMap.clientName >= 0 ? colMap.clientName : 3;
+      const cQuoteNoIdx = colMap.quoteNo >= 0 ? colMap.quoteNo : 4;
+
       data.forEach(row => {
-        const [timestamp, salesName, accountId, clientName, quoteNo] = row;
+        const timestamp = row[cTimestampIdx] || '';
+        const salesName = row[cSalesNameIdx] || '';
+        const accountId = row[cAccountIdIdx] || '';
+        const clientName = row[cClientNameIdx] || '';
+        const quoteNo = row[cQuoteNoIdx] || '';
 
         Object.keys(PRODUCT_RULES).forEach(pCode => {
           if (selectedProd !== 'ALL' && selectedProd !== pCode) return;
 
-          const rule = PRODUCT_RULES[pCode];
-          const comm = (row[rule.colComm] || '').trim();
-          const desc = (row[rule.colDesc] || '').trim();
-          const qtyStr = row[rule.colQty] || '-';
-          const salesVal = parseSalesValue(row[rule.colSales]);
+          const pMap = colMap.products[pCode];
+          if (!pMap || pMap.colComm < 0) return;
+
+          const comm = (row[pMap.colComm] || '').trim();
+          const desc = (row[pMap.colDesc] || '').trim();
+          const qtyStr = row[pMap.colQty] || '-';
+          const salesVal = parseSalesValue(row[pMap.colSales]);
 
           const status = evalHopperStatus(salesName, accountId, pCode, comm, salesVal, trackedKeys);
 
@@ -478,11 +526,11 @@
             const combinedCommDesc = (desc && desc !== "0") ? `${comm} - ${desc}` : comm;
 
             rowsHtml += `<tr class="${rowClass}">
-              <td>${timestamp || ''}</td>
-              <td>${salesName || ''}</td>
-              <td>${accountId || ''}</td>
-              <td class="text-left px-2">${clientName || ''}</td>
-              <td>${quoteNo || ''}</td>
+              <td>${timestamp}</td>
+              <td>${salesName}</td>
+              <td>${accountId}</td>
+              <td class="text-left px-2">${clientName}</td>
+              <td>${quoteNo}</td>
               <td class="font-bold">${pCode}</td>
               <td class="text-left px-2">${combinedCommDesc}</td>
               <td class="text-right px-2">${salesVal > 0 ? salesVal.toLocaleString() : '0'}</td>
