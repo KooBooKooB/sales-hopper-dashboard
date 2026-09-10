@@ -34,7 +34,7 @@
     <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-3 border-b pb-4">
       <div>
         <h1 class="text-xl font-bold text-gray-800">Sales Hopper 2026 Dashboard</h1>
-        <p class="text-xs text-gray-500">ข้อมูล Real-time จาก Google Sheets (ไม่นับ Commodity: other, STUNT, ไม่มี)</p>
+        <p class="text-xs text-gray-500">ข้อมูล Real-time จาก Google Sheets (ซ่อนรายการ Commodity "ไม่มี")</p>
       </div>
       <div class="flex items-center gap-2">
         <span id="statusLed" class="inline-block w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></span>
@@ -162,11 +162,18 @@
     let currentView = 'summary';
     let currentQuarter = 'Q1';
 
-    // ฟังก์ชันเช็กว่า Commodity นี้ถูกยกเว้นหรือไม่ (other, STUNT, ไม่มี, 0)
+    // เช็กคำว่า other, STUNT
     function isExcludedCommodity(commStr) {
       if (!commStr) return true;
       const lower = commStr.trim().toLowerCase();
       return lower === "" || lower === "ไม่มี" || lower === "0" || lower.includes("other") || lower.includes("stunt");
+    }
+
+    // เช็กว่าว่าง หรือเป็น "ไม่มี" / "0" หรือไม่
+    function isNoneCommodity(commStr) {
+      if (!commStr) return true;
+      const lower = commStr.trim().toLowerCase();
+      return lower === "" || lower === "ไม่มี" || lower === "0";
     }
 
     function fetchData() {
@@ -295,9 +302,9 @@
           const comm = row[rule.colComm] || "";
           const salesVal = parseFloat((row[rule.colSales] || "0").replace(/,/g, ''));
 
-          if (comm && comm !== "0") {
+          if (!isNoneCommodity(comm)) {
             if (isExcludedCommodity(comm)) {
-              totalUncounted++; // ตกเงื่อนไข other, STUNT, ไม่มี
+              totalUncounted++;
             } else {
               let isMatchedGroup = false;
               Object.keys(rule.subCols).forEach(subCat => {
@@ -314,10 +321,10 @@
                     totalCounted++;
                     totalSalesVal += salesVal;
                   } else {
-                    totalUncounted++; // Account ซ้ำ
+                    totalUncounted++;
                   }
                 } else {
-                  totalUncounted++; // ยอดขายไม่ถึงเกณฑ์
+                  totalUncounted++;
                 }
               }
             }
@@ -525,6 +532,7 @@
       document.getElementById("tableContainer").innerHTML = html;
     }
 
+    // Detail View: แสดงเฉพาะรายการที่มี Commodity (ข้ามรายการ "ไม่มี" / "0")
     function renderDetailView(data, selectedProd) {
       let html = `<table class="min-w-full bg-white text-xs">
         <thead>
@@ -563,13 +571,14 @@
           const qtyStr = row[rule.colQty] || '-';
           const salesVal = parseFloat(salesStr.replace(/,/g, ''));
 
-          if (comm && comm !== "0") {
+          // ข้ามรายการที่เป็น "ไม่มี" หรือ "0" ทันที ไม่ต้องนำมาแสดง
+          if (!isNoneCommodity(comm)) {
             let isCounted = false;
             let statusText = "";
 
             if (isExcludedCommodity(comm)) {
               isCounted = false;
-              statusText = "❌ ไม่ถูกนับ (Commodity เป็น other / STUNT / ไม่มี)";
+              statusText = "❌ ไม่ถูกนับ (Commodity เป็น other / STUNT)";
             } else if (salesVal < rule.minSales) {
               isCounted = false;
               statusText = `❌ ไม่ถูกนับ (ยอดขาย < ${rule.minSales.toLocaleString()} บาท)`;
