@@ -34,7 +34,7 @@
     <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-3 border-b pb-4">
       <div>
         <h1 class="text-xl font-bold text-gray-800">Sales Hopper 2026 Dashboard</h1>
-        <p class="text-xs text-gray-500">ข้อมูล Real-time จาก Google Sheets (ดึง Item Description ตรงตามหมวดสินค้า)</p>
+        <p class="text-xs text-gray-500">ข้อมูล Real-time จาก Google Sheets (แก้ไขตำแหน่งคอลัมน์ Item Description แล้ว)</p>
       </div>
       <div class="flex items-center gap-2">
         <span id="statusLed" class="inline-block w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></span>
@@ -149,11 +149,13 @@
       "LB_RY": ["จุฑามาศ อิ่มพิทักษ์", "ศิริลักษณ์ กลิ่นหอม", "สุวรรณา รัตนาภากูล", "ธันยพัส รักษาถิ่น", "พรรณราย สุขมหาหลวง"]
     };
 
-    // PRODUCT_RULES Mapping:
-    // colComm: Commodity Index
-    // colDesc: Item Description Index (ตรงตามแต่ละหมวดสินค้า)
-    // colSales: Yearly Sales Index
-    // colQty: Yearly Qty Index
+    // Correct Column Index Mapping according to Borneo Hopper 2026 Google Sheet:
+    // 818: Comm=5, ItemNo=6, Desc=7, Sales=8, Qty=9
+    // 953: Comm=10, ItemNo=11, Desc=12, Sales=13, Qty=14
+    // 957: Comm=15, ItemNo=16, Desc=17, Sales=18, Qty=19
+    // 959: Comm=20, ItemNo=21, Desc=22, Sales=23, Qty=24
+    // 962: Comm=25, ItemNo=26, Desc=27, Sales=28, Qty=29
+    // 947: Comm=30, ItemNo=31, Desc=32, Sales=33, Qty=34
     const PRODUCT_RULES = {
       "818": { colComm: 5,  colDesc: 7,  colSales: 8,  colQty: 9,  minSales: 30000, subCols: { "Nomad": ["Nomad"], "Chemical": ["Chemical"], "Sorbent": ["Sorbent"], "Safety Walk": ["Safety Walk"] } },
       "953": { colComm: 10, colDesc: 12, colSales: 13, colQty: 14, minSales: 30000, subCols: { "WYPALL X": ["WYPALL X"], "WYPALL L": ["WYPALL L"], "Special Wiper": ["SPECIAL WYPER", "Special Wiper"] } },
@@ -528,7 +530,7 @@
       document.getElementById("tableContainer").innerHTML = html;
     }
 
-    // Detail View: แสดงชื่อรุ่นสินค้า (Item Description) ตรงตามคอลัมน์ของแต่ละหมวดสินค้า
+    // Detail View: ดึงชื่อรุ่นสินค้า (Item Description) ตรงจากคอลัมน์ของแต่ละหมวดสินค้า
     function renderDetailView(data, selectedProd) {
       let html = `<table class="min-w-full bg-white text-xs">
         <thead>
