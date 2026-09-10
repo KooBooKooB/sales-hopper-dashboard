@@ -34,7 +34,7 @@
     <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-3 border-b pb-4">
       <div>
         <h1 class="text-xl font-bold text-gray-800">Sales Hopper 2026 Dashboard</h1>
-        <p class="text-xs text-gray-500">ข้อมูล Real-time จาก Google Sheets (ไฮไลท์สีแดงสำหรับรายการที่ไม่ถูกนับ)</p>
+        <p class="text-xs text-gray-500">ข้อมูล Real-time จาก Google Sheets (ยกเว้น Commodity: other / ไฮไลท์สีแดงรายการไม่ถูกนับ)</p>
       </div>
       <div class="flex items-center gap-2">
         <span id="statusLed" class="inline-block w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></span>
@@ -262,7 +262,6 @@
         filtered = filtered.filter(row => row[1] === selectedSales);
       }
 
-      // Calculate & Render KPI Top Summary Cards
       calculateKpiCards(filtered, selectedProd);
 
       if (currentView === 'summary') {
@@ -286,10 +285,16 @@
           if (selectedProd !== 'ALL' && selectedProd !== pCode) return;
 
           const rule = PRODUCT_RULES[pCode];
-          const comm = row[rule.colComm] || "";
+          const comm = (row[rule.colComm] || "").trim();
           const salesVal = parseFloat((row[rule.colSales] || "0").replace(/,/g, ''));
 
           if (comm && comm !== "ไม่มี" && comm !== "0") {
+            // เช็กเงื่อนไข Commodity เป็น Other
+            if (comm.toLowerCase() === "other" || comm.toLowerCase().includes("other")) {
+              totalUncounted++;
+              return;
+            }
+
             let isMatchedGroup = false;
             Object.keys(rule.subCols).forEach(subCat => {
               if (rule.subCols[subCat].some(kw => comm.toLowerCase().includes(kw.toLowerCase()))) {
@@ -299,7 +304,7 @@
 
             if (isMatchedGroup) {
               if (salesVal >= rule.minSales) {
-                const uniqueKey = `${salesName}_${accountId}_${pCode}_${comm.trim().toLowerCase()}`;
+                const uniqueKey = `${salesName}_${accountId}_${pCode}_${comm.toLowerCase()}`;
                 if (!globalTrackedKeys.has(uniqueKey)) {
                   globalTrackedKeys.add(uniqueKey);
                   totalCounted++;
@@ -404,8 +409,13 @@
 
           Object.keys(PRODUCT_RULES).forEach(pCode => {
             const rule = PRODUCT_RULES[pCode];
-            const comm = row[rule.colComm] || "";
+            const comm = (row[rule.colComm] || "").trim();
             const salesVal = parseFloat((row[rule.colSales] || "0").replace(/,/g, ''));
+
+            // ไม่นับถ้า Commodity เป็น other
+            if (comm.toLowerCase() === "other" || comm.toLowerCase().includes("other")) {
+              return;
+            }
 
             if (salesVal >= rule.minSales) {
               Object.keys(rule.subCols).forEach(subCat => {
@@ -413,7 +423,7 @@
                 const isMatch = keywords.some(kw => comm.toLowerCase().includes(kw.toLowerCase()));
 
                 if (isMatch) {
-                  const uniqueKey = `${salesName}_${accountId}_${pCode}_${subCat}_${comm.trim().toLowerCase()}`;
+                  const uniqueKey = `${salesName}_${accountId}_${pCode}_${subCat}_${comm.toLowerCase()}`;
                   if (!trackedKeys.has(uniqueKey)) {
                     trackedKeys.add(uniqueKey);
                     subCounts[`${pCode}_${subCat}`]++;
@@ -515,7 +525,6 @@
       document.getElementById("tableContainer").innerHTML = html;
     }
 
-    // Detail View with separate columns and uncounted rows highlighted in Red
     function renderDetailView(data, selectedProd) {
       let html = `<table class="min-w-full bg-white text-xs">
         <thead>
@@ -548,7 +557,7 @@
           if (selectedProd !== 'ALL' && selectedProd !== pCode) return;
 
           const rule = PRODUCT_RULES[pCode];
-          const comm = row[rule.colComm] || '';
+          const comm = (row[rule.colComm] || '').trim();
           const desc = row[rule.colDesc] || '';
           const salesStr = row[rule.colSales] || '0';
           const qtyStr = row[rule.colQty] || '-';
@@ -558,11 +567,14 @@
             let isCounted = false;
             let statusText = "";
 
-            if (salesVal < rule.minSales) {
+            if (comm.toLowerCase() === "other" || comm.toLowerCase().includes("other")) {
+              isCounted = false;
+              statusText = "❌ ไม่ถูกนับ (Commodity เป็น Other)";
+            } else if (salesVal < rule.minSales) {
               isCounted = false;
               statusText = `❌ ไม่ถูกนับ (ยอดขาย < ${rule.minSales.toLocaleString()} บาท)`;
             } else {
-              const uniqueKey = `${salesName}_${accountId}_${pCode}_${comm.trim().toLowerCase()}`;
+              const uniqueKey = `${salesName}_${accountId}_${pCode}_${comm.toLowerCase()}`;
               if (trackedKeys.has(uniqueKey)) {
                 isCounted = false;
                 statusText = "❌ ไม่ถูกนับ (Account ซ้ำใน Commodity นี้)";
