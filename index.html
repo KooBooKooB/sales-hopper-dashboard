@@ -27,7 +27,7 @@
     <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-3 border-b pb-4">
       <div>
         <h1 class="text-xl font-bold text-gray-800">Sales Hopper 2026 Dashboard</h1>
-        <p class="text-xs text-gray-500">ข้อมูล Real-time จาก Google Sheets (Dynamic Header Mapping)</p>
+        <p class="text-xs text-gray-500">ข้อมูล Real-time จาก Google Sheets (แก้ไขการแยกย่อย 953 และ Total แม่นยำ)</p>
       </div>
       <div class="flex items-center gap-2">
         <span id="statusLed" class="inline-block w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></span>
@@ -143,18 +143,19 @@
       "LB_RY": ["จุฑามาศ อิ่มพิทักษ์", "ศิริลักษณ์ กลิ่นหอม", "สุวรรณา รัตนาภากูล", "ธันยพัส รักษาถิ่น", "พรรณราย สุขมหาหลวง"]
     };
 
+    // กำหนดคีย์เวิร์ดของแต่ละกลุ่มย่อยแบบเฉพาะเจาะจง (Strict Non-Overlapping Rules)
     const PRODUCT_RULES = {
-      "818": { minSales: 30000, minHighlight: 6, subCols: { "Nomad": ["Nomad"], "Chemical": ["Chemical"], "Sorbent": ["Sorbent"], "Safety Walk": ["Safety Walk"] } },
-      "953": { minSales: 30000, minHighlight: 6, subCols: { "WYPALL X": ["WYPALL X"], "WYPALL L": ["WYPALL L"], "Special Wiper": ["SPECIAL WYPER", "Special Wiper"] } },
-      "957": { minSales: 30000, minHighlight: 6, subCols: { "ถุงมือกันบาด": ["ถุงมือกันบาด", "กลุ่มถุงมือกันบาด"], "Back support": ["Back support"] } },
-      "959": { minSales: 30000, minHighlight: 6, subCols: { "Goggle": ["Goggle"], "Spectacle": ["Spectacle"], "Cleaning Solution": ["Cleaning Solution"] } },
-      "962": { minSales: 10000, minHighlight: 3, subCols: { "Speedglas": ["Speedglas", "Speedglas™"] } },
-      "947": { minSales: 30000, minHighlight: 6, subCols: { "Wonder grip": ["Wonder grip", "Wonder grip gloves"], "Protape": ["Protape", "Protape safety helmet"] } }
+      "818": { minSales: 30000, minHighlight: 6, subCols: { "Nomad": ["nomad"], "Chemical": ["chemical"], "Sorbent": ["sorbent"], "Safety Walk": ["safety walk"] } },
+      "953": { minSales: 30000, minHighlight: 6, subCols: { "WYPALL X": ["wypall x", "x80", "x70", "x60"], "WYPALL L": ["wypall l", "l40", "l30", "l20"], "Special Wiper": ["special wiper", "special wyper", "critical clean", "kimtech"] } },
+      "957": { minSales: 30000, minHighlight: 6, subCols: { "ถุงมือกันบาด": ["ถุงมือกันบาด", "กันบาด"], "Back support": ["back support", "พยุงหลัง"] } },
+      "959": { minSales: 30000, minHighlight: 6, subCols: { "Goggle": ["goggle"], "Spectacle": ["spectacle"], "Cleaning Solution": ["cleaning solution"] } },
+      "962": { minSales: 10000, minHighlight: 3, subCols: { "Speedglas": ["speedglas"] } },
+      "947": { minSales: 30000, minHighlight: 6, subCols: { "Wonder grip": ["wonder grip"], "Protape": ["protape"] } }
     };
 
     // Global State & Dynamic Col Mapping
     let rawData = [];
-    let colMap = {}; // ตัวแปรเก็บตำแหน่ง Index คอลัมน์ที่ค้นหาได้แบบ Dynamic
+    let colMap = {};
     let currentView = 'summary';
     let currentQuarter = 'Q1';
 
@@ -185,10 +186,10 @@
         return;
       }
 
-      // 1. ดึงชื่อ Header ทั้งหมดจาก Google Sheets
+      // ดึงชื่อ Header ทั้งหมดจาก Google Sheets
       const headers = json.table.cols.map(col => (col?.label || col?.id || "").trim());
 
-      // 2. ค้นหาตำแหน่ง Index ของแต่ละคอลัมน์โดยอัตโนมัติจากชื่อ Header
+      // ค้นหาตำแหน่ง Index ของแต่ละคอลัมน์โดยอัตโนมัติจากชื่อ Header
       colMap = {
         timestamp: headers.findIndex(h => h.includes("ประทับเวลา")),
         salesName: headers.findIndex(h => h.includes("ชื่อฝ่ายขาย")),
@@ -207,7 +208,6 @@
         };
       });
 
-      // 3. แปลง Rows ข้อมูล
       rawData = json.table.rows.map(row => {
         if (!row.c) return [];
         return row.c.map(cell => {
@@ -245,6 +245,18 @@
       };
 
       return qBounds[q] ?? true;
+    }
+
+    // ฟังก์ชันระบุกลุ่มย่อยของสินค้าที่แม่นยำที่สุด
+    function matchSubCategory(pCode, normComm) {
+      const subCols = PRODUCT_RULES[pCode].subCols;
+      for (const [subCatName, keywords] of Object.entries(subCols)) {
+        if (keywords.some(kw => normComm.includes(kw))) {
+          return subCatName;
+        }
+      }
+      // กรณีไม่เจอกลุ่มย่อยเฉพาะ ให้คืนค่ากลุ่มแรกไว้เป็นค่าเริ่มต้นกรณีที่เป็นสินค้ากลุ่มนั้นๆ
+      return Object.keys(subCols)[0];
     }
 
     function evalHopperStatus(salesName, accountId, pCode, comm, salesVal, trackedKeys) {
@@ -397,19 +409,17 @@
             const salesVal = parseSalesValue(row[pMap.colSales]);
             const normComm = comm.toLowerCase();
 
-            if (normComm.includes("stunt") || normComm.includes("other") || salesVal < rule.minSales) return;
+            if (!comm || comm === "ไม่มี" || comm === "0" || normComm.includes("stunt") || normComm.includes("other") || salesVal < rule.minSales) return;
 
-            Object.keys(rule.subCols).forEach(subCat => {
-              const isMatch = rule.subCols[subCat].some(kw => normComm.includes(kw.toLowerCase()));
-              if (isMatch) {
-                const uniqueKey = `${salesName}_${accountId}_${pCode}_${subCat}_${normComm}`;
-                if (!trackedKeys.has(uniqueKey)) {
-                  trackedKeys.add(uniqueKey);
-                  subCounts[`${pCode}_${subCat}`]++;
-                  grandTotals[`${pCode}_${subCat}`]++;
-                }
-              }
-            });
+            // ค้นหากลุ่มย่อยแบบตรงตัว
+            const targetSubCat = matchSubCategory(pCode, normComm);
+            const uniqueKey = `${salesName}_${accountId}_${pCode}_${normComm}`;
+
+            if (!trackedKeys.has(uniqueKey)) {
+              trackedKeys.add(uniqueKey);
+              subCounts[`${pCode}_${targetSubCat}`]++;
+              grandTotals[`${pCode}_${targetSubCat}`]++;
+            }
           });
         });
 
@@ -417,6 +427,7 @@
           const isHidden = selectedProd !== 'ALL' && selectedProd !== pCode ? 'hidden' : '';
           const subCats = Object.keys(PRODUCT_RULES[pCode].subCols);
           
+          // คำนวณยอดรวม Total ของหมวดสินค้านั้นๆ จากผลรวมช่องย่อย
           const categoryGroupTotal = subCats.reduce((sum, sub) => sum + subCounts[`${pCode}_${sub}`], 0);
           grandTotals[`${pCode}_TOTAL`] += categoryGroupTotal;
 
