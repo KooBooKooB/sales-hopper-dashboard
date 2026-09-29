@@ -162,14 +162,12 @@
     let currentView = 'summary';
     let currentQuarter = 'Q1';
 
-    // เช็กคำว่า other, STUNT
     function isExcludedCommodity(commStr) {
       if (!commStr) return true;
       const lower = commStr.trim().toLowerCase();
       return lower === "" || lower === "ไม่มี" || lower === "0" || lower.includes("other") || lower.includes("stunt");
     }
 
-    // เช็กว่าว่าง หรือเป็น "ไม่มี" / "0" หรือไม่
     function isNoneCommodity(commStr) {
       if (!commStr) return true;
       const lower = commStr.trim().toLowerCase();
@@ -200,8 +198,11 @@
         return;
       }
 
-      rawData = json.table.rows.map(row => {
-        return row.c ? row.c.map(cell => (cell && cell.v !== null && cell.v !== undefined) ? String(cell.f || cell.v) : "") : [];
+      // เก็บ rowIndex เพิ่มลงในวัตถุ row เพื่อยึดการแยกแยะบรรทัดให้แน่นอน
+      rawData = json.table.rows.map((row, index) => {
+        const cells = row.c ? row.c.map(cell => (cell && cell.v !== null && cell.v !== undefined) ? String(cell.f || cell.v) : "") : [];
+        cells.rowIndex = index;
+        return cells;
       });
 
       populateSalesDropdown();
@@ -289,7 +290,7 @@
       let totalCounted = 0;
       let totalUncounted = 0;
       let totalSalesVal = 0;
-      const globalTrackedKeys = new Set();
+      const seenAccountCommodities = new Set();
 
       data.forEach(row => {
         const accountId = row[2] || "";
@@ -314,10 +315,10 @@
 
               if (isMatchedGroup) {
                 if (salesVal >= rule.minSales) {
-                  // ใช้ Key ระดับ Account + Product + Commodity (ไม่ใส่ salesName)
-                  const uniqueKey = `${accountId}_${pCode}_${comm.trim().toLowerCase()}`;
-                  if (!globalTrackedKeys.has(uniqueKey)) {
-                    globalTrackedKeys.add(uniqueKey);
+                  // เช็ก Account + Product Code + Commodity แบบไม่มี Row Index เพื่อห้ามซ้ำระหว่างแถวอื่น
+                  const accountKey = `${accountId}_${pCode}_${comm.trim().toLowerCase()}`;
+                  if (!seenAccountCommodities.has(accountKey)) {
+                    seenAccountCommodities.add(accountKey);
                     totalCounted++;
                     totalSalesVal += salesVal;
                   } else {
@@ -403,8 +404,7 @@
         grandTotals[`${pCode}_TOTAL`] = 0;
       });
 
-      // ใช้ globalTrackedKeys ร่วมกันข้ามรายการเพื่อป้องกัน Account เดียวกันซ้ำ
-      const globalTrackedKeys = new Set();
+      const globalAccountCommodities = new Set();
 
       salesList.forEach(salesName => {
         const salesRows = data.filter(r => r[1] === salesName);
@@ -426,9 +426,9 @@
             const salesVal = parseFloat((row[rule.colSales] || "0").replace(/,/g, ''));
 
             if (!isExcludedCommodity(comm) && salesVal >= rule.minSales) {
-              const uniqueKey = `${accountId}_${pCode}_${comm.trim().toLowerCase()}`;
+              const accountKey = `${accountId}_${pCode}_${comm.trim().toLowerCase()}`;
 
-              if (!globalTrackedKeys.has(uniqueKey)) {
+              if (!globalAccountCommodities.has(accountKey)) {
                 let isMatched = false;
                 Object.keys(rule.subCols).forEach(subCat => {
                   const keywords = rule.subCols[subCat];
@@ -440,7 +440,7 @@
                 });
 
                 if (isMatched) {
-                  globalTrackedKeys.add(uniqueKey);
+                  globalAccountCommodities.add(accountKey);
                   groupTotals[pCode]++;
                   grandTotals[`${pCode}_TOTAL`]++;
                 }
@@ -555,7 +555,30 @@
         </thead>
         <tbody>`;
 
-      const trackedKeys = new Set();
+      // ใช้ Map ในการตรวจจับความซ้ำ โดยคีย์คือ Account + Product Code + Commodity 
+      // และเก็บ rowIndex ของแถวแรกที่พบ เพื่อให้รายการแรกผ่านเกณฑ์เสมอ
+      const firstSeenRowMap = new Map();
+
+      data.forEach(row => {
+        const accountId = row[2] || '';
+        const rIndex = row.rowIndex;
+
+        Object.keys(PRODUCT_RULES).forEach(pCode => {
+          if (selectedProd !== 'ALL' && selectedProd !== pCode) return;
+
+          const rule = PRODUCT_RULES[pCode];
+          const comm = row[rule.colComm] || '';
+          const salesStr = row[rule.colSales] || '0';
+          const salesVal = parseFloat(salesStr.replace(/,/g, ''));
+
+          if (!isNoneCommodity(comm) && !isExcludedCommodity(comm) && salesVal >= rule.minSales) {
+            const accountKey = `${accountId}_${pCode}_${comm.trim().toLowerCase()}`;
+            if (!firstSeenRowMap.has(accountKey)) {
+              firstSeenRowMap.set(accountKey, rIndex);
+            }
+          }
+        });
+      });
 
       data.forEach(row => {
         const timestamp = row[0] || '';
@@ -563,6 +586,7 @@
         const accountId = row[2] || '';
         const clientName = row[3] || '';
         const quoteNo = row[4] || '';
+        const rIndex = row.rowIndex;
 
         Object.keys(PRODUCT_RULES).forEach(pCode => {
           if (selectedProd !== 'ALL' && selectedProd !== pCode) return;
@@ -584,15 +608,16 @@
               isCounted = false;
               statusText = `❌ ไม่ถูกนับ (ยอดขาย < ${rule.minSales.toLocaleString()} บาท)`;
             } else {
-              // แก้ไขจุดนี้: ใช้ Key เดียวกับ KPI และ Summary
-              const uniqueKey = `${accountId}_${pCode}_${comm.trim().toLowerCase()}`;
-              if (trackedKeys.has(uniqueKey)) {
-                isCounted = false;
-                statusText = "❌ ไม่ถูกนับ (Account ซ้ำใน Commodity นี้)";
-              } else {
-                trackedKeys.add(uniqueKey);
+              const accountKey = `${accountId}_${pCode}_${comm.trim().toLowerCase()}`;
+              const firstSeenIndex = firstSeenRowMap.get(accountKey);
+
+              // ถ้า rowIndex ของแถวปัจจุบันตรงกับแถวแรกที่ถูกบันทึกไว้ ถือว่าผ่านเกณฑ์ (✅ ถูกนับ)
+              if (firstSeenIndex === rIndex) {
                 isCounted = true;
                 statusText = "✅ ถูกนับ";
+              } else {
+                isCounted = false;
+                statusText = "❌ ไม่ถูกนับ (Account ซ้ำใน Commodity นี้)";
               }
             }
 
