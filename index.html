@@ -149,13 +149,14 @@
       "LB_RY": ["จุฑามาศ อิ่มพิทักษ์", "ศิริลักษณ์ กลิ่นหอม", "สุวรรณา รัตนาภากูล", "ธันยพัส รักษาถิ่น", "พรรณราย สุขมหาหลวง"]
     };
 
+    // เพิ่ม colDesc เพื่อใช้อ้างอิงคอลัมน์ชื่อรุ่นสินค้า (Description) ในแต่ละ Product Group
     const PRODUCT_RULES = {
-      "818": { colComm: 5, colSales: 8, colQty: 9, minSales: 30000, subCols: { "Nomad": ["Nomad"], "Chemical": ["Chemical"], "Sorbent": ["Sorbent"], "Safety Walk": ["Safety Walk"] } },
-      "953": { colComm: 10, colSales: 13, colQty: 14, minSales: 30000, subCols: { "WYPALL X": ["WYPALL X"], "WYPALL L": ["WYPALL L"], "Special Wiper": ["SPECIAL WYPER", "Special Wiper"] } },
-      "957": { colComm: 15, colSales: 18, colQty: 19, minSales: 30000, subCols: { "ถุงมือกันบาด": ["ถุงมือกันบาด", "กลุ่มถุงมือกันบาด"], "Back support": ["Back support"] } },
-      "959": { colComm: 20, colSales: 23, colQty: 24, minSales: 30000, subCols: { "Goggle": ["Goggle"], "Spectacle": ["Spectacle"], "Cleaning Solution": ["Cleaning Solution"] } },
-      "962": { colComm: 25, colSales: 28, colQty: 29, minSales: 10000, subCols: { "Speedglas": ["Speedglas", "Speedglas™"] } },
-      "947": { colComm: 30, colSales: 33, colQty: 34, minSales: 30000, subCols: { "Wonder grip": ["Wonder grip", "Wonder grip gloves"], "Protape": ["Protape", "Protape safety helmet"] } }
+      "818": { colComm: 5, colDesc: 7, colSales: 8, colQty: 9, minSales: 30000, subCols: { "Nomad": ["Nomad"], "Chemical": ["Chemical"], "Sorbent": ["Sorbent"], "Safety Walk": ["Safety Walk"] } },
+      "953": { colComm: 10, colDesc: 12, colSales: 13, colQty: 14, minSales: 30000, subCols: { "WYPALL X": ["WYPALL X"], "WYPALL L": ["WYPALL L"], "Special Wiper": ["SPECIAL WYPER", "Special Wiper"] } },
+      "957": { colComm: 15, colDesc: 17, colSales: 18, colQty: 19, minSales: 30000, subCols: { "ถุงมือกันบาด": ["ถุงมือกันบาด", "กลุ่มถุงมือกันบาด"], "Back support": ["Back support"] } },
+      "959": { colComm: 20, colDesc: 22, colSales: 23, colQty: 24, minSales: 30000, subCols: { "Goggle": ["Goggle"], "Spectacle": ["Spectacle"], "Cleaning Solution": ["Cleaning Solution"] } },
+      "962": { colComm: 25, colDesc: 27, colSales: 28, colQty: 29, minSales: 10000, subCols: { "Speedglas": ["Speedglas", "Speedglas™"] } },
+      "947": { colComm: 30, colDesc: 32, colSales: 33, colQty: 34, minSales: 30000, subCols: { "Wonder grip": ["Wonder grip", "Wonder grip gloves"], "Protape": ["Protape", "Protape safety helmet"] } }
     };
 
     let rawData = [];
@@ -198,7 +199,6 @@
         return;
       }
 
-      // เก็บ rowIndex เพิ่มลงในวัตถุ row เพื่อยึดการแยกแยะบรรทัดให้แน่นอน
       rawData = json.table.rows.map((row, index) => {
         const cells = row.c ? row.c.map(cell => (cell && cell.v !== null && cell.v !== undefined) ? String(cell.f || cell.v) : "") : [];
         cells.rowIndex = index;
@@ -315,7 +315,6 @@
 
               if (isMatchedGroup) {
                 if (salesVal >= rule.minSales) {
-                  // เช็ก Account + Product Code + Commodity แบบไม่มี Row Index เพื่อห้ามซ้ำระหว่างแถวอื่น
                   const accountKey = `${accountId}_${pCode}_${comm.trim().toLowerCase()}`;
                   if (!seenAccountCommodities.has(accountKey)) {
                     seenAccountCommodities.add(accountKey);
@@ -538,6 +537,7 @@
     }
 
     function renderDetailView(data, selectedProd) {
+      // เพิ่มหัวตาราง <th>ชื่อรุ่นสินค้า (Description)</th>
       let html = `<table class="min-w-full bg-white text-xs">
         <thead>
           <tr class="bg-gray-200 text-gray-800">
@@ -548,6 +548,7 @@
             <th>Quotation No.</th>
             <th>หมวดสินค้า</th>
             <th>Commodity</th>
+            <th>ชื่อรุ่นสินค้า (Description)</th>
             <th>ยอดขายต่อปี (บาท)</th>
             <th>ปริมาณใช้ต่อปี</th>
             <th>สถานะการนับ</th>
@@ -555,8 +556,6 @@
         </thead>
         <tbody>`;
 
-      // ใช้ Map ในการตรวจจับความซ้ำ โดยคีย์คือ Account + Product Code + Commodity 
-      // และเก็บ rowIndex ของแถวแรกที่พบ เพื่อให้รายการแรกผ่านเกณฑ์เสมอ
       const firstSeenRowMap = new Map();
 
       data.forEach(row => {
@@ -593,6 +592,7 @@
 
           const rule = PRODUCT_RULES[pCode];
           const comm = row[rule.colComm] || '';
+          const desc = row[rule.colDesc] || '-'; // ดึงข้อมูล Description ตาม index ของ Product Group นั้นๆ
           const salesStr = row[rule.colSales] || '0';
           const qtyStr = row[rule.colQty] || '-';
           const salesVal = parseFloat(salesStr.replace(/,/g, ''));
@@ -611,7 +611,6 @@
               const accountKey = `${accountId}_${pCode}_${comm.trim().toLowerCase()}`;
               const firstSeenIndex = firstSeenRowMap.get(accountKey);
 
-              // ถ้า rowIndex ของแถวปัจจุบันตรงกับแถวแรกที่ถูกบันทึกไว้ ถือว่าผ่านเกณฑ์ (✅ ถูกนับ)
               if (firstSeenIndex === rIndex) {
                 isCounted = true;
                 statusText = "✅ ถูกนับ";
@@ -623,6 +622,7 @@
 
             const rowClass = isCounted ? "row-counted" : "row-uncounted font-semibold";
 
+            // เพิ่มคอลัมน์ <td class="text-left px-2">${desc}</td> แสดงผลชื่อรุ่นสินค้า
             html += `<tr class="${rowClass}">
               <td>${timestamp}</td>
               <td>${salesName}</td>
@@ -631,6 +631,7 @@
               <td>${quoteNo}</td>
               <td class="font-bold">${pCode}</td>
               <td class="text-left px-2">${comm}</td>
+              <td class="text-left px-2">${desc}</td>
               <td class="text-right px-2">${salesVal > 0 ? salesVal.toLocaleString() : '0'}</td>
               <td>${qtyStr}</td>
               <td class="font-bold px-2">${statusText}</td>
