@@ -292,7 +292,6 @@
       const globalTrackedKeys = new Set();
 
       data.forEach(row => {
-        const salesName = row[1];
         const accountId = row[2] || "";
 
         Object.keys(PRODUCT_RULES).forEach(pCode => {
@@ -315,7 +314,8 @@
 
               if (isMatchedGroup) {
                 if (salesVal >= rule.minSales) {
-                  const uniqueKey = `${salesName}_${accountId}_${pCode}_${comm.trim().toLowerCase()}`;
+                  // ใช้ Key ระดับ Account + Product + Commodity (ไม่ใส่ salesName)
+                  const uniqueKey = `${accountId}_${pCode}_${comm.trim().toLowerCase()}`;
                   if (!globalTrackedKeys.has(uniqueKey)) {
                     globalTrackedKeys.add(uniqueKey);
                     totalCounted++;
@@ -403,6 +403,9 @@
         grandTotals[`${pCode}_TOTAL`] = 0;
       });
 
+      // ใช้ globalTrackedKeys ร่วมกันข้ามรายการเพื่อป้องกัน Account เดียวกันซ้ำ
+      const globalTrackedKeys = new Set();
+
       salesList.forEach(salesName => {
         const salesRows = data.filter(r => r[1] === salesName);
         let subCounts = {};
@@ -414,8 +417,6 @@
           });
         });
 
-        const trackedKeys = new Set();
-
         salesRows.forEach(row => {
           const accountId = row[2] || "";
 
@@ -425,21 +426,25 @@
             const salesVal = parseFloat((row[rule.colSales] || "0").replace(/,/g, ''));
 
             if (!isExcludedCommodity(comm) && salesVal >= rule.minSales) {
-              Object.keys(rule.subCols).forEach(subCat => {
-                const keywords = rule.subCols[subCat];
-                const isMatch = keywords.some(kw => comm.toLowerCase().includes(kw.toLowerCase()));
+              const uniqueKey = `${accountId}_${pCode}_${comm.trim().toLowerCase()}`;
 
-                if (isMatch) {
-                  const uniqueKey = `${salesName}_${accountId}_${pCode}_${subCat}_${comm.trim().toLowerCase()}`;
-                  if (!trackedKeys.has(uniqueKey)) {
-                    trackedKeys.add(uniqueKey);
+              if (!globalTrackedKeys.has(uniqueKey)) {
+                let isMatched = false;
+                Object.keys(rule.subCols).forEach(subCat => {
+                  const keywords = rule.subCols[subCat];
+                  if (keywords.some(kw => comm.toLowerCase().includes(kw.toLowerCase()))) {
                     subCounts[`${pCode}_${subCat}`]++;
-                    groupTotals[pCode]++;
                     grandTotals[`${pCode}_${subCat}`]++;
-                    grandTotals[`${pCode}_TOTAL`]++;
+                    isMatched = true;
                   }
+                });
+
+                if (isMatched) {
+                  globalTrackedKeys.add(uniqueKey);
+                  groupTotals[pCode]++;
+                  grandTotals[`${pCode}_TOTAL`]++;
                 }
-              });
+              }
             }
           });
         });
@@ -532,7 +537,6 @@
       document.getElementById("tableContainer").innerHTML = html;
     }
 
-    // Detail View: ตัดคอลัมน์ "ชื่อรุ่นสินค้า (Description)" ออกแล้ว
     function renderDetailView(data, selectedProd) {
       let html = `<table class="min-w-full bg-white text-xs">
         <thead>
@@ -569,7 +573,6 @@
           const qtyStr = row[rule.colQty] || '-';
           const salesVal = parseFloat(salesStr.replace(/,/g, ''));
 
-          // ข้ามรายการที่เป็น "ไม่มี" หรือ "0" ทันที ไม่ต้องนำมาแสดง
           if (!isNoneCommodity(comm)) {
             let isCounted = false;
             let statusText = "";
@@ -581,7 +584,8 @@
               isCounted = false;
               statusText = `❌ ไม่ถูกนับ (ยอดขาย < ${rule.minSales.toLocaleString()} บาท)`;
             } else {
-              const uniqueKey = `${salesName}_${accountId}_${pCode}_${comm.trim().toLowerCase()}`;
+              // แก้ไขจุดนี้: ใช้ Key เดียวกับ KPI และ Summary
+              const uniqueKey = `${accountId}_${pCode}_${comm.trim().toLowerCase()}`;
               if (trackedKeys.has(uniqueKey)) {
                 isCounted = false;
                 statusText = "❌ ไม่ถูกนับ (Account ซ้ำใน Commodity นี้)";
